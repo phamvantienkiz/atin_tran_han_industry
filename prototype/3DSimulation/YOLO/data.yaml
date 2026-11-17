@@ -1,0 +1,10 @@
+path: c:/Users/ADMIN/OneDrive/Máy tính/atin_tran_han_industry/prototype/3DSimulation/YOLO
+train: train/images
+val: test/images
+test: test/images
+
+names:
+  0: person
+  1: glove
+  2: hairnet
+  3: apron

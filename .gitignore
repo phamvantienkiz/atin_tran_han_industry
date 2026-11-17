@@ -222,3 +222,8 @@ __marimo__/
 # user customs
 customers/
 docs/ai/
+.vscode/
+runs/
+*.cache
+*.pt
+prototype/3DSimulation/YOLO/infer_out/
