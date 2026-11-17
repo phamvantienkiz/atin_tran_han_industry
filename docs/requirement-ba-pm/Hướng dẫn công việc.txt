@@ -1,0 +1,7 @@
+Note 1 số phương pháp làm việc với các bài nhà máy hoặc các bài có mặt bằng cố định:
+1. Vào trang https://atin.tuyentech.id.vn/apps/mo-phong-nha-may-tran-han/, atin/Atin@123# để xem qua
+2. Tự dùng AI agent để tạo ra trang web tương tự từ mặt bằng của khách và các bài toán tương ứng của mình (Dùng threejs để mô phỏng 3D)
+3. Threejs đã có sẵn việc tạo box của các object qua hình ảnh, việc của mình chỉ là nghĩ kịch bản và setup góc cam mô phỏng, sau đó bảo AI agent export ảnh và bbox của các object mình cần dùng và train với yolo để ra 1 model dùng được.
+4. export các góc cam hoặc record từ bản 3D thành rtsp để giả lập như luồng cam thật
+5. Chạy thử nghiệm các bài toán của khách hàng với những kịch bản và góc cam do mình tự nghĩ
+6. Sau khi khách có luồng cam thực tế, việc của mình chỉ cần là setup lại polygon, model với camera thật. Còn lại source code sẽ giữ nguyên ở bản làm với rtsp mô phỏng
