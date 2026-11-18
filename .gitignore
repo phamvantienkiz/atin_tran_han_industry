@@ -223,3 +223,11 @@ __marimo__/
 customers/
 docs/ai/
 view/docs/linkcam.md
+.vscode/
+runs/
+*.cache
+*.pt
+!prototype/3DSimulation/YOLO/best.pt
+*.webm
+prototype/3DSimulation/YOLO/infer_out/
+prototype/3DSimulation/rtsp/bin/

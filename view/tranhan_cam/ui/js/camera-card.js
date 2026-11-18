@@ -14,6 +14,7 @@ export class CameraCard {
     this.onNotify = onNotify;
     this.snapshotTimer = null;
     this.destroyed = false;
+    this.detection = null;
 
     const subtitle = cam.note ? `Kênh ${cam.channel} · ${cam.note}` : `Kênh ${cam.channel}`;
     const streamLabel = cam.mode === 'snapshot'
@@ -76,6 +77,10 @@ export class CameraCard {
           <span class="dot"></span>
           <span class="badge-text">${STATE_LABELS.connecting}</span>
         </div>
+        <div class="zone-status-badge" data-state="idle">
+          <span class="dot"></span>
+          <span class="zone-badge-text">${(cam.zone && cam.zone.length >= 3) ? 'Đang quét...' : 'Chưa vẽ vùng'}</span>
+        </div>
         <div class="viewport-fallback hidden">
           <p>Không thể kết nối luồng video từ kênh ${cam.channel}</p>
           <button type="button" class="btn btn-subtle btn-sm btn-retry">Thử kết nối lại</button>
@@ -103,6 +108,8 @@ export class CameraCard {
     this.canvas = this.el.querySelector('canvas');
     this.badge = this.el.querySelector('.stream-badge');
     this.badgeText = this.el.querySelector('.badge-text');
+    this.zoneBadge = this.el.querySelector('.zone-status-badge');
+    this.zoneBadgeText = this.el.querySelector('.zone-badge-text');
     this.fallbackEl = this.el.querySelector('.viewport-fallback');
     this.latencyEl = this.el.querySelector('.m-latency');
     this.zoneToolbar = this.el.querySelector('.zone-toolbar');
@@ -139,6 +146,29 @@ export class CameraCard {
   setStatus(state) {
     this.badge.dataset.state = state;
     this.badgeText.textContent = STATE_LABELS[state] || STATE_LABELS.offline;
+  }
+
+  setDetection(det) {
+    this.detection = det || null;
+    if (!this.cam.zone || this.cam.zone.length < 3) {
+      this.zoneBadge.dataset.state = 'idle';
+      this.zoneBadgeText.textContent = 'Chưa vẽ vùng';
+    } else if (!det) {
+      this.zoneBadge.dataset.state = 'idle';
+      this.zoneBadgeText.textContent = 'Đang quét...';
+    } else if (det.error) {
+      this.zoneBadge.dataset.state = 'idle';
+      this.zoneBadgeText.textContent = 'Lỗi quét AI';
+    } else if (det.person_in_zone) {
+      this.zoneBadge.dataset.state = 'alert';
+      this.zoneBadgeText.textContent = `Có người trong vùng (${det.in_zone_count})`;
+    } else {
+      this.zoneBadge.dataset.state = 'clear';
+      this.zoneBadgeText.textContent = det.total_persons > 0
+        ? `Vùng trống (${det.total_persons} ngoài vùng)`
+        : 'Vùng trống';
+    }
+    drawCardOverlay(this);
   }
 
   startStream() {

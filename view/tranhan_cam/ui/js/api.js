@@ -44,4 +44,5 @@ export const api = {
 
   listFrameSets: () => request('GET', '/api/storages/frames'),
   deleteFrameSet: (folder) => request('DELETE', `/api/storages/frames/${encodeURIComponent(folder)}`),
+  detections: () => request('GET', '/api/detections'),
 };

@@ -483,6 +483,48 @@ body {
   background: var(--data-alert);
 }
 
+.zone-status-badge {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(8px);
+  box-shadow: var(--shadow-control);
+  padding: 5px 10px;
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  pointer-events: none;
+}
+
+.zone-status-badge .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+}
+
+.zone-status-badge[data-state="alert"] {
+  background: rgba(254, 242, 242, 0.96);
+  color: #b91c1c;
+}
+
+.zone-status-badge[data-state="alert"] .dot {
+  background: #ef4444;
+}
+
+.zone-status-badge[data-state="clear"] {
+  color: #047857;
+}
+
+.zone-status-badge[data-state="clear"] .dot {
+  background: #10b981;
+}
+
 .viewport-fallback {
   position: absolute;
   inset: 0;

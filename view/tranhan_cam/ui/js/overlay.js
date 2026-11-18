@@ -1,4 +1,6 @@
 const ZONE_COLOR = '#1f5fff';
+const ALERT_COLOR = '#ef4444';
+const SAFE_COLOR = '#10b981';
 
 export function drawCardOverlay(card) {
   const c = card.canvas;
@@ -18,6 +20,7 @@ export function drawCardOverlay(card) {
 
   // 1. Saved Poly Zone
   const zone = card.cam.zone;
+  const personInZone = Boolean(card.detection?.person_in_zone);
   if (zone && zone.length >= 3 && !card.zoneEditor.active) {
     g.beginPath();
     zone.forEach((p, idx) => {
@@ -25,11 +28,47 @@ export function drawCardOverlay(card) {
       else g.lineTo(p.x * w, p.y * h);
     });
     g.closePath();
-    g.fillStyle = 'rgba(31, 95, 255, 0.14)';
+    g.fillStyle = personInZone ? 'rgba(239, 68, 68, 0.16)' : 'rgba(31, 95, 255, 0.14)';
     g.fill();
     g.lineWidth = 2;
-    g.strokeStyle = ZONE_COLOR;
+    g.strokeStyle = personInZone ? ALERT_COLOR : ZONE_COLOR;
     g.stroke();
+  }
+
+  // 1b. Detected Person Bounding Boxes & Diagonal Center Points
+  const persons = card.detection?.persons || [];
+  if (!card.zoneEditor.active && persons.length > 0) {
+    g.font = '600 11px Inter, system-ui, sans-serif';
+    for (const p of persons) {
+      const x1 = p.x1 * w;
+      const y1 = p.y1 * h;
+      const bw = (p.x2 - p.x1) * w;
+      const bh = (p.y2 - p.y1) * h;
+      const cx = p.cx * w;
+      const cy = p.cy * h;
+      const color = p.in_zone ? ALERT_COLOR : SAFE_COLOR;
+
+      g.lineWidth = 2;
+      g.strokeStyle = color;
+      g.strokeRect(x1, y1, bw, bh);
+
+      // Diagonal center point
+      g.beginPath();
+      g.arc(cx, cy, 4, 0, Math.PI * 2);
+      g.fillStyle = color;
+      g.fill();
+      g.lineWidth = 1.5;
+      g.strokeStyle = '#ffffff';
+      g.stroke();
+
+      const label = `${p.in_zone ? 'Trong vùng' : 'Ngoài vùng'} ${Math.round(p.conf * 100)}%`;
+      const textW = g.measureText(label).width;
+      const tagY = Math.max(16, y1);
+      g.fillStyle = color;
+      g.fillRect(x1, tagY - 16, textW + 10, 16);
+      g.fillStyle = '#ffffff';
+      g.fillText(label, x1 + 5, tagY - 4);
+    }
   }
 
   // 2. In-progress Zone Editor

@@ -432,6 +432,15 @@ window.addEventListener('resize', () => {
   Object.values(cards).forEach((c) => drawCardOverlay(c));
 });
 
+async function pollDetections() {
+  try {
+    const data = await api.detections();
+    Object.entries(cards).forEach(([camId, card]) => {
+      card.setDetection(data[camId] || null);
+    });
+  } catch (_) {}
+}
+
 async function init() {
   try {
     const cfg = await api.config();
@@ -440,7 +449,9 @@ async function init() {
   setLayout(layoutCount);
   await reloadCameras();
   await pollActiveRecords();
+  await pollDetections();
   setInterval(pollActiveRecords, 1000);
+  setInterval(pollDetections, 1000);
 }
 
 init();

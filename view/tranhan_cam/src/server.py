@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import time
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
@@ -17,8 +18,10 @@ from pydantic import BaseModel, Field
 
 try:
     from src.media_jobs import MediaManager, validate_safe_name
+    from src.person_detector import PersonZoneDetector
 except ImportError:
     from media_jobs import MediaManager, validate_safe_name
+    from person_detector import PersonZoneDetector
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 UI_DIR = BASE_DIR / "ui"
@@ -137,8 +140,26 @@ class ZonePayload(BaseModel):
     points: list[ZonePoint]
 
 
-app = FastAPI(title="ATIN Tran Han Live View", version="0.1.0")
 media = MediaManager(BASE_DIR / "storages", NVR_BASE_URL, NVR_USER, NVR_PASS)
+detector = PersonZoneDetector(
+    model_path=BASE_DIR / "models" / "yolo26s.onnx",
+    nvr_base_url=NVR_BASE_URL,
+    nvr_user=NVR_USER,
+    nvr_pass=NVR_PASS,
+    load_cameras_fn=load_cameras,
+)
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    detector.start()
+    try:
+        yield
+    finally:
+        detector.stop()
+
+
+app = FastAPI(title="ATIN Tran Han Live View", version="0.1.0", lifespan=lifespan)
 
 
 class RecordStartPayload(BaseModel):
@@ -162,6 +183,11 @@ async def get_config() -> dict[str, Any]:
 @app.get("/api/cameras")
 async def list_cameras() -> list[dict[str, Any]]:
     return load_cameras()
+
+
+@app.get("/api/detections")
+async def get_detections() -> dict[str, Any]:
+    return detector.get_all()
 
 
 @app.post("/api/cameras", status_code=201)
