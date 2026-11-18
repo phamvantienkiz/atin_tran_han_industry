@@ -26,4 +26,22 @@ export const api = {
   deleteCamera: (id) => request('DELETE', `/api/cameras/${id}`),
   saveZone: (id, points) => request('PUT', `/api/cameras/${id}/zone`, { points }),
   probeCamera: (id) => request('GET', `/api/cameras/${id}/probe`),
+
+  startRecord: (id, durationMinutes, subtype = 0) =>
+    request('POST', `/api/cameras/${id}/record/start`, {
+      duration_minutes: durationMinutes,
+      subtype,
+    }),
+  stopRecord: (id) => request('POST', `/api/cameras/${id}/record/stop`),
+  activeRecords: () => request('GET', '/api/records/active'),
+
+  listVideos: () => request('GET', '/api/storages/videos'),
+  deleteVideo: (filename) => request('DELETE', `/api/storages/videos/${encodeURIComponent(filename)}`),
+  extractFrames: (filename, skipFrames) =>
+    request('POST', `/api/storages/videos/${encodeURIComponent(filename)}/extract`, {
+      skip_frames: skipFrames,
+    }),
+
+  listFrameSets: () => request('GET', '/api/storages/frames'),
+  deleteFrameSet: (folder) => request('DELETE', `/api/storages/frames/${encodeURIComponent(folder)}`),
 };

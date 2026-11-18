@@ -1,11 +1,17 @@
 import { api } from './api.js';
 import { CameraCard } from './camera-card.js';
+import { DatasetPage } from './dataset-page.js';
 import { drawCardOverlay } from './overlay.js';
 import { parseZoneJson } from './zone-editor.js';
 
 const gridEl = document.getElementById('camera-grid');
+const pageLiveEl = document.getElementById('page-live');
+const pageDatasetEl = document.getElementById('page-dataset');
+const liveControlsEl = document.getElementById('live-controls');
 const nvrStatusEl = document.getElementById('nvr-status');
 const nvrHostLabel = document.getElementById('nvr-host-label');
+const recGlobalPill = document.getElementById('rec-global-pill');
+const recGlobalText = document.getElementById('rec-global-text');
 const toastEl = document.getElementById('toast');
 
 const briefModal = document.getElementById('brief-modal');
@@ -14,6 +20,9 @@ const focusTitle = document.getElementById('focus-modal-title');
 const focusSub = document.getElementById('focus-modal-sub');
 const focusImg = document.getElementById('focus-img');
 const focusDownload = document.getElementById('focus-download');
+const btnFocusRecord = document.getElementById('btn-focus-record');
+const btnFocusRecordLabel = document.getElementById('btn-focus-record-label');
+const recordMenu = document.getElementById('record-menu');
 
 const camModal = document.getElementById('cam-modal');
 const camForm = document.getElementById('cam-form');
@@ -31,8 +40,42 @@ const btnImportZone = document.getElementById('btn-import-zone');
 
 let cards = {};
 let layoutCount = Number(localStorage.getItem('tranhan_grid_layout') || 4);
+let currentPage = 'live';
 let toastTimer = null;
 let focusCam = null;
+let focusSubtype = 0;
+let focusRetries = 0;
+let focusStreamTimer = null;
+let activeJobs = [];
+let hadActiveJobs = false;
+
+const datasetPage = new DatasetPage(
+  document.getElementById('videos-grid'),
+  document.getElementById('frames-grid'),
+  showToast,
+);
+
+function formatSec(sec) {
+  const s = Math.max(0, Math.round(sec || 0));
+  const m = Math.floor(s / 60);
+  const rem = s % 60;
+  return `${String(m).padStart(2, '0')}:${String(rem).padStart(2, '0')}`;
+}
+
+function switchPage(page) {
+  currentPage = page === 'dataset' ? 'dataset' : 'live';
+  document.querySelectorAll('[data-page]').forEach((btn) => {
+    btn.setAttribute('aria-selected', String(btn.dataset.page === currentPage));
+  });
+  pageLiveEl.classList.toggle('hidden', currentPage !== 'live');
+  liveControlsEl.classList.toggle('hidden', currentPage !== 'live');
+  pageDatasetEl.classList.toggle('hidden', currentPage !== 'dataset');
+  if (currentPage === 'dataset') {
+    datasetPage.refresh();
+  } else {
+    requestAnimationFrame(() => Object.values(cards).forEach((c) => drawCardOverlay(c)));
+  }
+}
 
 function showToast(msg) {
   toastEl.textContent = msg;
@@ -70,26 +113,102 @@ function renderEmptySlots() {
 
 function openFocusModal(cam) {
   focusCam = cam;
+  focusRetries = 0;
   focusTitle.textContent = cam.name;
   focusSub.textContent = cam.note ? `Kênh ${cam.channel} · ${cam.note}` : `Kênh ${cam.channel}`;
   focusDownload.href = `/api/cameras/${cam.id}/snapshot.jpg`;
   focusDownload.download = `${cam.id}-snapshot.jpg`;
-  setFocusSubtype(0);
+  recordMenu.classList.add('hidden');
+  btnFocusRecord.setAttribute('aria-expanded', 'false');
+
+  // Pause grid stream for this camera so NVR main-stream opens cleanly
+  cards[cam.id]?.stopStream();
+
   focusModal.classList.remove('hidden');
+  syncRecordUi();
+  setFocusSubtype(0, 150);
 }
 
-function setFocusSubtype(subtype) {
+function setFocusSubtype(subtype, delayMs = 0) {
   if (!focusCam) return;
+  focusSubtype = subtype;
+  focusRetries = 0;
+  clearTimeout(focusStreamTimer);
   document.querySelectorAll('[data-focus-sub]').forEach((btn) => {
     btn.setAttribute('aria-selected', String(Number(btn.dataset.focusSub) === subtype));
   });
-  focusImg.src = `/api/cameras/${focusCam.id}/mjpeg?subtype=${subtype}&t=${Date.now()}`;
+  focusImg.removeAttribute('src');
+  const camId = focusCam.id;
+  focusStreamTimer = setTimeout(() => {
+    if (!focusCam || focusCam.id !== camId) return;
+    focusImg.src = `/api/cameras/${camId}/mjpeg?subtype=${subtype}&t=${Date.now()}`;
+  }, delayMs);
+}
+
+focusImg.addEventListener('load', () => {
+  focusRetries = 0;
+});
+
+focusImg.addEventListener('error', () => {
+  if (!focusCam || focusModal.classList.contains('hidden')) return;
+  if (focusRetries >= 2) return;
+  focusRetries += 1;
+  const camId = focusCam.id;
+  const sub = focusSubtype;
+  clearTimeout(focusStreamTimer);
+  focusStreamTimer = setTimeout(() => {
+    if (!focusCam || focusCam.id !== camId) return;
+    focusImg.src = `/api/cameras/${camId}/mjpeg?subtype=${sub}&retry=${focusRetries}&t=${Date.now()}`;
+  }, 450);
+});
+
+function syncRecordUi() {
+  if (activeJobs.length > 0) {
+    const first = activeJobs[0];
+    recGlobalPill.classList.remove('hidden');
+    recGlobalText.textContent = `Đang ghi CH ${first.channel} · còn ${formatSec(first.remaining_sec)}`;
+  } else {
+    recGlobalPill.classList.add('hidden');
+  }
+
+  if (!focusCam) return;
+  const job = activeJobs.find((j) => j.cam_id === focusCam.id);
+  if (job) {
+    btnFocusRecord.classList.remove('btn-primary');
+    btnFocusRecord.classList.add('btn-recording');
+    btnFocusRecordLabel.textContent = `Dừng · ${formatSec(job.remaining_sec)}`;
+    recordMenu.classList.add('hidden');
+    btnFocusRecord.setAttribute('aria-expanded', 'false');
+  } else {
+    btnFocusRecord.classList.add('btn-primary');
+    btnFocusRecord.classList.remove('btn-recording');
+    btnFocusRecordLabel.textContent = 'Record';
+  }
+}
+
+async function pollActiveRecords() {
+  try {
+    activeJobs = await api.activeRecords();
+    if (hadActiveJobs && activeJobs.length === 0) {
+      showToast('Đã hoàn tất ghi hình video');
+      if (currentPage === 'dataset') datasetPage.refresh();
+    }
+    hadActiveJobs = activeJobs.length > 0;
+    syncRecordUi();
+  } catch (_) {}
 }
 
 function closeFocusModal() {
+  const closedCamId = focusCam?.id;
+  clearTimeout(focusStreamTimer);
   focusModal.classList.add('hidden');
+  recordMenu.classList.add('hidden');
+  btnFocusRecord.setAttribute('aria-expanded', 'false');
   focusImg.removeAttribute('src');
   focusCam = null;
+  if (closedCamId) {
+    cards[closedCamId]?.startStream();
+  }
 }
 
 function openCamModal(card) {
@@ -144,6 +263,62 @@ async function reloadCameras() {
 }
 
 // Event listeners
+document.querySelectorAll('[data-page]').forEach((btn) => {
+  btn.addEventListener('click', () => switchPage(btn.dataset.page));
+});
+
+btnFocusRecord.addEventListener('click', async (e) => {
+  e.stopPropagation();
+  if (!focusCam) return;
+  const active = activeJobs.find((j) => j.cam_id === focusCam.id);
+  if (active) {
+    btnFocusRecord.disabled = true;
+    try {
+      await api.stopRecord(focusCam.id);
+      showToast('Đã dừng ghi hình và lưu video MP4');
+      await pollActiveRecords();
+    } catch (err) {
+      showToast(err.message);
+    } finally {
+      btnFocusRecord.disabled = false;
+    }
+    return;
+  }
+  const willOpen = recordMenu.classList.contains('hidden');
+  recordMenu.classList.toggle('hidden', !willOpen);
+  btnFocusRecord.setAttribute('aria-expanded', String(willOpen));
+});
+
+document.querySelectorAll('[data-rec-min]').forEach((btn) => {
+  btn.addEventListener('click', async () => {
+    if (!focusCam) return;
+    const minutes = Number(btn.dataset.recMin);
+    recordMenu.classList.add('hidden');
+    btnFocusRecord.setAttribute('aria-expanded', 'false');
+    btnFocusRecord.disabled = true;
+    try {
+      await api.startRecord(focusCam.id, minutes, focusSubtype);
+      showToast(`Bắt đầu ghi ${focusCam.name} (${minutes} phút)`);
+      await pollActiveRecords();
+    } catch (err) {
+      showToast(err.message);
+    } finally {
+      btnFocusRecord.disabled = false;
+    }
+  });
+});
+
+document.addEventListener('click', (e) => {
+  if (!recordMenu.classList.contains('hidden') && !e.target.closest('.record-menu-wrap')) {
+    recordMenu.classList.add('hidden');
+    btnFocusRecord.setAttribute('aria-expanded', 'false');
+  }
+});
+
+document.getElementById('btn-reload-dataset').addEventListener('click', () => {
+  datasetPage.refresh();
+});
+
 document.querySelectorAll('.topbar [data-layout]').forEach((btn) => {
   btn.addEventListener('click', () => setLayout(Number(btn.dataset.layout)));
 });
@@ -264,6 +439,8 @@ async function init() {
   } catch (_) {}
   setLayout(layoutCount);
   await reloadCameras();
+  await pollActiveRecords();
+  setInterval(pollActiveRecords, 1000);
 }
 
 init();

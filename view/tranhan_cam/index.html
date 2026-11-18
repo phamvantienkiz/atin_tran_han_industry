@@ -24,42 +24,83 @@
       </div>
 
       <div class="topbar-right">
-        <div class="segmented" role="tablist" aria-label="Bố cục lưới camera">
-          <button type="button" role="tab" aria-selected="false" class="seg-btn" data-layout="1">1</button>
-          <button type="button" role="tab" aria-selected="true" class="seg-btn" data-layout="4">4</button>
-          <button type="button" role="tab" aria-selected="false" class="seg-btn" data-layout="6">6</button>
+        <div class="segmented" role="tablist" aria-label="Chuyển trang">
+          <button type="button" role="tab" aria-selected="true" class="seg-btn" data-page="live">Live view</button>
+          <button type="button" role="tab" aria-selected="false" class="seg-btn" data-page="dataset">Video &amp; Tách frame</button>
         </div>
 
-        <button type="button" id="btn-refresh-all" class="btn btn-subtle" title="Kết nối lại toàn bộ camera">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M21 12a9 9 0 1 1-2.64-6.36" />
-            <polyline points="21 3 21 9 15 9" />
-          </svg>
-          <span>Làm mới</span>
-        </button>
+        <span id="rec-global-pill" class="status-pill rec-pill hidden" role="status" aria-live="polite">
+          <span class="rec-dot"></span>
+          <span id="rec-global-text">Đang ghi</span>
+        </span>
 
-        <button type="button" id="btn-brief" class="btn btn-subtle">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M9 11l3 3L22 4" />
-            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
-          </svg>
-          <span>Bài toán AI</span>
-        </button>
+        <div id="live-controls" class="topbar-live-controls">
+          <div class="segmented" role="tablist" aria-label="Bố cục lưới camera">
+            <button type="button" role="tab" aria-selected="false" class="seg-btn" data-layout="1">1</button>
+            <button type="button" role="tab" aria-selected="true" class="seg-btn" data-layout="4">4</button>
+            <button type="button" role="tab" aria-selected="false" class="seg-btn" data-layout="6">6</button>
+          </div>
 
-        <button type="button" id="btn-add-cam" class="btn btn-primary">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <line x1="12" y1="5" x2="12" y2="19" />
-            <line x1="5" y1="12" x2="19" y2="12" />
-          </svg>
-          <span>Thêm camera</span>
-        </button>
+          <button type="button" id="btn-refresh-all" class="btn btn-subtle" title="Kết nối lại toàn bộ camera">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+              <polyline points="21 3 21 9 15 9" />
+            </svg>
+            <span>Làm mới</span>
+          </button>
+
+          <button type="button" id="btn-brief" class="btn btn-subtle">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M9 11l3 3L22 4" />
+              <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+            </svg>
+            <span>Bài toán AI</span>
+          </button>
+
+          <button type="button" id="btn-add-cam" class="btn btn-primary">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            <span>Thêm camera</span>
+          </button>
+        </div>
       </div>
     </div>
   </header>
 
   <main class="workspace">
-    <section class="grid-section" aria-label="Danh sách camera trực tiếp">
+    <section id="page-live" class="grid-section" aria-label="Danh sách camera trực tiếp">
       <div id="camera-grid" class="camera-grid" data-layout="4"></div>
+    </section>
+
+    <section id="page-dataset" class="dataset-section hidden" aria-label="Quản lý video và tách frame">
+      <div class="section-block">
+        <div class="section-head">
+          <div>
+            <h2 class="section-title">Video đã ghi hình</h2>
+            <p class="section-sub">Lưu tại storages/videos · Tải về hoặc tách frame để gán nhãn train model</p>
+          </div>
+          <button type="button" id="btn-reload-dataset" class="btn btn-subtle">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+              <polyline points="21 3 21 9 15 9" />
+            </svg>
+            <span>Làm mới danh sách</span>
+          </button>
+        </div>
+        <div id="videos-grid" class="dataset-grid"></div>
+      </div>
+
+      <div class="section-block">
+        <div class="section-head">
+          <div>
+            <h2 class="section-title">Bộ frame đã tách</h2>
+            <p class="section-sub">Lưu tại storages/frames · Tải toàn bộ dưới dạng tệp nén .zip</p>
+          </div>
+        </div>
+        <div id="frames-grid" class="dataset-grid"></div>
+      </div>
     </section>
   </main>
 
@@ -123,8 +164,19 @@
         </div>
         <div class="modal-header-actions">
           <div class="segmented" role="tablist" aria-label="Chất lượng luồng">
-            <button type="button" role="tab" aria-selected="true" class="seg-btn" data-focus-sub="1">Luồng phụ</button>
-            <button type="button" role="tab" aria-selected="false" class="seg-btn" data-focus-sub="0">Luồng chính</button>
+            <button type="button" role="tab" aria-selected="true" class="seg-btn" data-focus-sub="0">Luồng chính</button>
+            <button type="button" role="tab" aria-selected="false" class="seg-btn" data-focus-sub="1">Luồng phụ</button>
+          </div>
+          <div class="record-menu-wrap">
+            <button type="button" id="btn-focus-record" class="btn btn-primary" aria-expanded="false" aria-haspopup="menu">
+              <span class="rec-btn-dot"></span>
+              <span id="btn-focus-record-label">Record</span>
+            </button>
+            <div id="record-menu" class="record-menu hidden" role="menu" aria-label="Chọn thời gian ghi hình">
+              <button type="button" role="menuitem" class="record-menu-item" data-rec-min="5">5 phút</button>
+              <button type="button" role="menuitem" class="record-menu-item" data-rec-min="10">10 phút</button>
+              <button type="button" role="menuitem" class="record-menu-item" data-rec-min="20">20 phút</button>
+            </div>
           </div>
           <a id="focus-download" class="btn btn-subtle" href="#" download>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">

@@ -15,6 +15,8 @@ from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from media_jobs import MediaManager, validate_safe_name
+
 BASE_DIR = Path(__file__).resolve().parent
 DATA_FILE = BASE_DIR / "cameras.json"
 
@@ -132,6 +134,16 @@ class ZonePayload(BaseModel):
 
 
 app = FastAPI(title="ATIN Tran Han Live View", version="0.1.0")
+media = MediaManager(BASE_DIR / "storages", NVR_BASE_URL, NVR_USER, NVR_PASS)
+
+
+class RecordStartPayload(BaseModel):
+    duration_minutes: int = Field(description="5, 10, hoặc 20 phút")
+    subtype: int = Field(default=0, ge=0, le=1)
+
+
+class ExtractFramesPayload(BaseModel):
+    skip_frames: int = Field(description="5 hoặc 10 frame liên tiếp")
 
 
 @app.get("/api/config")
@@ -296,6 +308,120 @@ async def stream_mjpeg(
         media_type=content_type,
         headers={"Cache-Control": "no-store"},
     )
+
+
+@app.post("/api/cameras/{cam_id}/record/start")
+async def start_record(cam_id: str, payload: RecordStartPayload) -> dict[str, Any]:
+    cam = find_camera(cam_id)
+    try:
+        return media.start_record(cam, payload.duration_minutes, payload.subtype)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.post("/api/cameras/{cam_id}/record/stop")
+async def stop_record(cam_id: str) -> dict[str, Any]:
+    find_camera(cam_id)
+    try:
+        return media.stop_record(cam_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.get("/api/records/active")
+async def list_active_records() -> list[dict[str, Any]]:
+    return media.active_jobs()
+
+
+@app.get("/api/storages/videos")
+async def list_videos() -> list[dict[str, Any]]:
+    return media.list_videos()
+
+
+@app.get("/api/storages/videos/{filename}/download")
+async def download_video(filename: str) -> FileResponse:
+    try:
+        safe = validate_safe_name(filename)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    target = media.videos_dir / safe
+    if not target.is_file():
+        raise HTTPException(status_code=404, detail="Video không tồn tại")
+    return FileResponse(target, media_type="video/mp4", filename=safe)
+
+
+@app.delete("/api/storages/videos/{filename}")
+async def delete_video(filename: str) -> dict[str, str]:
+    try:
+        media.delete_video(filename)
+        return {"status": "deleted", "filename": filename}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.post("/api/storages/videos/{filename}/extract")
+async def extract_frames(filename: str, payload: ExtractFramesPayload) -> dict[str, Any]:
+    import asyncio
+
+    try:
+        return await asyncio.to_thread(media.extract_frames, filename, payload.skip_frames)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.get("/api/storages/frames")
+async def list_frame_sets() -> list[dict[str, Any]]:
+    return media.list_frame_sets()
+
+
+@app.get("/api/storages/frames/{folder}/preview/{image_name}")
+async def preview_frame(folder: str, image_name: str) -> FileResponse:
+    try:
+        safe_folder = validate_safe_name(folder)
+        safe_img = validate_safe_name(image_name)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    target = media.frames_dir / safe_folder / safe_img
+    if not target.is_file():
+        raise HTTPException(status_code=404, detail="Ảnh không tồn tại")
+    return FileResponse(target, media_type="image/jpeg")
+
+
+@app.get("/api/storages/frames/{folder}/download.zip")
+async def download_frames_zip(folder: str) -> Response:
+    import asyncio
+
+    try:
+        data = await asyncio.to_thread(media.build_frames_zip_bytes, folder)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    safe_folder = validate_safe_name(folder)
+    return Response(
+        content=data,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{safe_folder}.zip"'},
+    )
+
+
+@app.delete("/api/storages/frames/{folder}")
+async def delete_frame_set(folder: str) -> dict[str, str]:
+    try:
+        media.delete_frame_set(folder)
+        return {"status": "deleted", "folder": folder}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @app.get("/")

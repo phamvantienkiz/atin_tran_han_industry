@@ -740,6 +740,224 @@ body {
   box-shadow: var(--shadow-primary);
 }
 
+/* Dataset Page & Record Controls */
+.topbar-live-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.rec-pill {
+  background: #fdecec;
+  color: var(--data-alert);
+  font-weight: 500;
+}
+
+.rec-dot,
+.rec-btn-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--data-alert);
+  flex-shrink: 0;
+}
+
+.record-menu-wrap {
+  position: relative;
+}
+
+.record-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 50;
+  min-width: 132px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-1);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.record-menu-item {
+  border: 0;
+  background: transparent;
+  width: 100%;
+  min-height: 40px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 120ms ease-out;
+}
+
+.record-menu-item:hover {
+  background: var(--bg-subtle);
+}
+
+.btn-recording {
+  background: var(--data-alert);
+  color: #ffffff;
+  box-shadow: none;
+}
+
+.btn-recording .rec-btn-dot {
+  background: #ffffff;
+}
+
+.dataset-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.section-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.section-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.section-title {
+  font-size: 22px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
+.section-sub {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-top: var(--space-1);
+}
+
+.dataset-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-6);
+}
+
+@media (max-width: 1100px) {
+  .dataset-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .dataset-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.data-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-xl);
+  padding: var(--space-6);
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.data-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.data-card-title {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text-primary);
+  word-break: break-word;
+}
+
+.data-card-sub {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-top: var(--space-1);
+}
+
+.hero-metric {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.hero-num {
+  font-size: 40px;
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
+.hero-unit {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.thumb-strip {
+  background: var(--bg-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-2);
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.thumb-strip img {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  display: block;
+}
+
+.data-card-controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.data-card-actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.data-card-actions > .btn {
+  flex: 1 1 120px;
+}
+
+.empty-state {
+  grid-column: 1 / -1;
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-xl);
+  padding: var(--space-8);
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
 @media (max-width: 600px) {
   .cam-card {
     padding: var(--space-5);
