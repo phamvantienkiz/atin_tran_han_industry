@@ -1,0 +1,42 @@
+[
+  {
+    "id": "ch16",
+    "channel": 16,
+    "name": "Tăng trọng 1",
+    "note": "Khu vực máy tăng trọng 1",
+    "subtype": 1,
+    "mode": "mjpeg",
+    "enabled": true,
+    "zone": []
+  },
+  {
+    "id": "ch17",
+    "channel": 17,
+    "name": "Tăng trọng 2",
+    "note": "Khu vực máy tăng trọng 2",
+    "subtype": 1,
+    "mode": "mjpeg",
+    "enabled": true,
+    "zone": []
+  },
+  {
+    "id": "ch18",
+    "channel": 18,
+    "name": "Tăng trọng 3",
+    "note": "Khu vực máy tăng trọng 3",
+    "subtype": 1,
+    "mode": "mjpeg",
+    "enabled": true,
+    "zone": []
+  },
+  {
+    "id": "ch21",
+    "channel": 21,
+    "name": "Định hình 2",
+    "note": "Khu vực định hình 2",
+    "subtype": 1,
+    "mode": "mjpeg",
+    "enabled": true,
+    "zone": []
+  }
+]

@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ATIN Trần Hân — Live View</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="topbar-left">
+        <div class="brand-group">
+          <h1 class="brand">ATIN Trần Hân</h1>
+          <span class="brand-sub">Live view nhà máy thủy sản</span>
+        </div>
+        <span id="nvr-status" class="status-pill" role="status" aria-live="polite">
+          <span class="status-dot"></span>
+          <span id="nvr-host-label">nmts2025.smartddns.tv</span>
+        </span>
+      </div>
+
+      <div class="topbar-right">
+        <div class="segmented" role="tablist" aria-label="Bố cục lưới camera">
+          <button type="button" role="tab" aria-selected="false" class="seg-btn" data-layout="1">1</button>
+          <button type="button" role="tab" aria-selected="true" class="seg-btn" data-layout="4">4</button>
+          <button type="button" role="tab" aria-selected="false" class="seg-btn" data-layout="6">6</button>
+        </div>
+
+        <button type="button" id="btn-refresh-all" class="btn btn-subtle" title="Kết nối lại toàn bộ camera">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+            <polyline points="21 3 21 9 15 9" />
+          </svg>
+          <span>Làm mới</span>
+        </button>
+
+        <button type="button" id="btn-brief" class="btn btn-subtle">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M9 11l3 3L22 4" />
+            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+          </svg>
+          <span>Bài toán AI</span>
+        </button>
+
+        <button type="button" id="btn-add-cam" class="btn btn-primary">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+          <span>Thêm camera</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <section class="grid-section" aria-label="Danh sách camera trực tiếp">
+      <div id="camera-grid" class="camera-grid" data-layout="4"></div>
+    </section>
+  </main>
+
+  <!-- Modal ghi chú 4 bài toán AI từ khách hàng -->
+  <div id="brief-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="brief-modal-title">
+    <div class="modal-card modal-wide">
+      <div class="modal-header">
+        <div>
+          <h2 id="brief-modal-title" class="modal-title">Bài toán giám sát AI</h2>
+          <p class="modal-subtitle">Đối chiếu luồng camera thực tế với 4 yêu cầu từ khách hàng</p>
+        </div>
+        <button type="button" class="icon-btn" data-close="brief-modal" aria-label="Đóng">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="brief-list">
+          <div class="brief-item">
+            <span class="brief-dot" style="background: var(--data-1)"></span>
+            <div>
+              <div class="brief-title">Cam 1 · Kiểm tra đồ bảo hộ lao động</div>
+              <div class="brief-desc">Phát hiện nhân sự vào khu vực chế biến có mặc đầy đủ trang bị bảo hộ hay không.</div>
+            </div>
+          </div>
+          <div class="brief-item">
+            <span class="brief-dot" style="background: var(--data-2)"></span>
+            <div>
+              <div class="brief-title">Cam 2 · Kiểm tra người trong vùng máy tăng trọng</div>
+              <div class="brief-desc">Giám sát vùng an toàn quanh máy tăng trọng (Tăng trọng 1 / 2 / 3), cảnh báo xâm nhập vùng nguy hiểm.</div>
+            </div>
+          </div>
+          <div class="brief-item">
+            <span class="brief-dot" style="background: var(--data-3)"></span>
+            <div>
+              <div class="brief-title">Cam 3 · Kiểm tra người trong vùng trực bảo vệ</div>
+              <div class="brief-desc">Xác định trạng thái có người trực tại chốt / khu vực bảo vệ theo khung giờ quy định.</div>
+            </div>
+          </div>
+          <div class="brief-item">
+            <span class="brief-dot" style="background: var(--data-4)"></span>
+            <div>
+              <div class="brief-title">Cam 4 · Ra/vào kho lạnh, người kẹt &amp; té ngã</div>
+              <div class="brief-desc">Đếm lượt ra/vào kho lạnh để tính số người còn lại bên trong và phát hiện sự cố té ngã.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal phóng to xem 1 camera -->
+  <div id="focus-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="focus-modal-title">
+    <div class="modal-card modal-xl">
+      <div class="modal-header">
+        <div>
+          <h2 id="focus-modal-title" class="modal-title">Xem chi tiết camera</h2>
+          <p id="focus-modal-sub" class="modal-subtitle"></p>
+        </div>
+        <div class="modal-header-actions">
+          <div class="segmented" role="tablist" aria-label="Chất lượng luồng">
+            <button type="button" role="tab" aria-selected="true" class="seg-btn" data-focus-sub="1">Luồng phụ</button>
+            <button type="button" role="tab" aria-selected="false" class="seg-btn" data-focus-sub="0">Luồng chính</button>
+          </div>
+          <a id="focus-download" class="btn btn-subtle" href="#" download>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            <span>Tải ảnh</span>
+          </a>
+          <button type="button" class="icon-btn" data-close="focus-modal" aria-label="Đóng">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+      </div>
+      <div class="focus-viewport">
+        <img id="focus-img" alt="Luồng camera phóng to" />
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal thêm / sửa camera -->
+  <div id="cam-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="cam-modal-title">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 id="cam-modal-title" class="modal-title">Thêm camera</h2>
+        <button type="button" class="icon-btn" data-close="cam-modal" aria-label="Đóng">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+      </div>
+      <form id="cam-form" class="modal-body">
+        <input type="hidden" id="cam-id" />
+        <div class="field-grid">
+          <label class="field">
+            <span>Kênh NVR</span>
+            <input type="number" id="cam-channel" min="1" max="128" placeholder="16" required />
+          </label>
+          <label class="field">
+            <span>Tên hiển thị</span>
+            <input type="text" id="cam-name" placeholder="Tăng trọng 1" required />
+          </label>
+        </div>
+        <label class="field">
+          <span>Ghi chú / Bài toán</span>
+          <input type="text" id="cam-note" placeholder="Ví dụ: Vùng máy tăng trọng 1" />
+        </label>
+        <div class="field-grid">
+          <label class="field">
+            <span>Chế độ phát</span>
+            <select id="cam-mode">
+              <option value="mjpeg">MJPEG trực tiếp</option>
+              <option value="snapshot">Snapshot định kỳ (1.5s)</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Luồng NVR</span>
+            <select id="cam-subtype">
+              <option value="1">Luồng phụ (Sub-stream)</option>
+              <option value="0">Luồng chính (Main-stream)</option>
+            </select>
+          </label>
+        </div>
+
+        <div id="cam-extra-tools" class="extra-tools hidden">
+          <label class="field">
+            <span>Zone JSON (tọa độ chuẩn hóa 0–1)</span>
+            <textarea id="cam-zone-json" rows="3" placeholder='[{"x":0.1,"y":0.35},...]'></textarea>
+          </label>
+          <button type="button" id="btn-import-zone" class="btn btn-subtle btn-full">Import tọa độ Zone</button>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" id="btn-delete-cam" class="btn btn-danger hidden">Xóa camera</button>
+          <div class="spacer"></div>
+          <button type="button" class="btn btn-subtle" data-close="cam-modal">Hủy</button>
+          <button type="submit" class="btn btn-primary">Lưu thay đổi</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+
+  <script type="module" src="/js/main.js"></script>
+</body>
+</html>
