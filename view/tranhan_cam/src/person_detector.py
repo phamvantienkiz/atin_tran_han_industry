@@ -80,7 +80,7 @@ class PersonZoneDetector:
 
     def _ensure_model(self) -> YOLO:
         if self._model is None:
-            self._model = YOLO(str(self.model_path))
+            self._model = YOLO(str(self.model_path), task="detect")
         return self._model
 
     def _detect_camera(self, client: httpx.Client, model: YOLO, cam: dict[str, Any]) -> dict[str, Any]:

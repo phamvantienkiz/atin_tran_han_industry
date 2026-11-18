@@ -142,7 +142,7 @@ class ZonePayload(BaseModel):
 
 media = MediaManager(BASE_DIR / "storages", NVR_BASE_URL, NVR_USER, NVR_PASS)
 detector = PersonZoneDetector(
-    model_path=BASE_DIR / "models" / "yolo26s.pt",
+    model_path=BASE_DIR / "models" / "yolo26s.onnx",
     nvr_base_url=NVR_BASE_URL,
     nvr_user=NVR_USER,
     nvr_pass=NVR_PASS,
