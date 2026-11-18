@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -17,10 +18,17 @@ from pydantic import BaseModel, Field
 BASE_DIR = Path(__file__).resolve().parent
 DATA_FILE = BASE_DIR / "cameras.json"
 
-NVR_HOST = os.getenv("NVR_HOST", "nmts2025.smartddns.tv")
+load_dotenv(BASE_DIR / ".env")
+
+NVR_HOST = os.getenv("NVR_HOST", "").strip()
 NVR_PORT = int(os.getenv("NVR_PORT", "80"))
-NVR_USER = os.getenv("NVR_USER", "user")
-NVR_PASS = os.getenv("NVR_PASS", "testcam@123")
+NVR_USER = os.getenv("NVR_USER", "").strip()
+NVR_PASS = os.getenv("NVR_PASS", "").strip()
+if not (NVR_HOST and NVR_USER and NVR_PASS):
+    raise RuntimeError(
+        "Thiếu cấu hình NVR_HOST, NVR_USER hoặc NVR_PASS trong file .env "
+        "(copy từ .env.example để cấu hình)."
+    )
 NVR_BASE_URL = f"http://{NVR_HOST}:{NVR_PORT}"
 
 DEFAULT_CAMERAS: list[dict[str, Any]] = [
