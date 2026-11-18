@@ -1,0 +1,44 @@
+{
+  "cam27": {
+    "label": "PoC 1 - Kiem tra BHLD",
+    "ppe_check": true,
+    "roi_norm": [
+      [0.10, 0.15],
+      [0.90, 0.15],
+      [0.90, 0.92],
+      [0.10, 0.92]
+    ],
+    "warn_empty_sec": 15.0
+  },
+  "camTT3": {
+    "label": "PoC 2 - Vung may tang trong",
+    "ppe_check": true,
+    "roi_norm": [
+      [0.2095, 0.6795],
+      [0.6757, 0.3352],
+      [0.7936, 0.4068],
+      [0.2303, 0.9900]
+    ],
+    "warn_empty_sec": 15.0
+  },
+  "cam01": {
+    "label": "PoC 3 - Chot bao ve cong Tay",
+    "ppe_check": false,
+    "roi_norm": [
+      [0.5160, 0.4993],
+      [0.5827, 0.5364],
+      [0.4968, 0.5757],
+      [0.4373, 0.5254]
+    ],
+    "warn_empty_sec": 30.0
+  },
+  "cam08": {
+    "label": "PoC 4 - Cua kho lanh",
+    "ppe_check": false,
+    "fall_check": true,
+    "line_norm": [
+      [0.4228, 0.6281],
+      [0.4189, 0.7181]
+    ]
+  }
+}
