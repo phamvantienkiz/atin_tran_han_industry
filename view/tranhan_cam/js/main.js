@@ -74,7 +74,7 @@ function openFocusModal(cam) {
   focusSub.textContent = cam.note ? `Kênh ${cam.channel} · ${cam.note}` : `Kênh ${cam.channel}`;
   focusDownload.href = `/api/cameras/${cam.id}/snapshot.jpg`;
   focusDownload.download = `${cam.id}-snapshot.jpg`;
-  setFocusSubtype(cam.subtype ?? 1);
+  setFocusSubtype(0);
   focusModal.classList.remove('hidden');
 }
 
