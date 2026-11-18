@@ -15,9 +15,13 @@ from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from media_jobs import MediaManager, validate_safe_name
+try:
+    from src.media_jobs import MediaManager, validate_safe_name
+except ImportError:
+    from media_jobs import MediaManager, validate_safe_name
 
-BASE_DIR = Path(__file__).resolve().parent
+BASE_DIR = Path(__file__).resolve().parent.parent
+UI_DIR = BASE_DIR / "ui"
 DATA_FILE = BASE_DIR / "cameras.json"
 
 load_dotenv(BASE_DIR / ".env")
@@ -426,12 +430,12 @@ async def delete_frame_set(folder: str) -> dict[str, str]:
 
 @app.get("/")
 async def index() -> FileResponse:
-    return FileResponse(BASE_DIR / "index.html")
+    return FileResponse(UI_DIR / "index.html")
 
 
-app.mount("/js", StaticFiles(directory=BASE_DIR / "js"), name="js")
+app.mount("/js", StaticFiles(directory=UI_DIR / "js"), name="js")
 
 
 @app.get("/styles.css")
 async def styles() -> FileResponse:
-    return FileResponse(BASE_DIR / "styles.css")
+    return FileResponse(UI_DIR / "styles.css")
