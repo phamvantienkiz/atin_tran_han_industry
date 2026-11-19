@@ -231,3 +231,24 @@ runs/
 *.webm
 prototype/3DSimulation/YOLO/infer_out/
 prototype/3DSimulation/rtsp/bin/
+
+# Heavy model weights, media & local storages
+*.onnx
+*.engine
+*.trt
+*.tflite
+*.pb
+*.h5
+*.ckpt
+*.safetensors
+*.bin
+*.png
+*.jpg
+*.jpeg
+*.mp4
+*.avi
+*.mkv
+*.mov
+*.zip
+*.tar.gz
+view/tranhan_cam/storages/
