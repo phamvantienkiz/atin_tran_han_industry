@@ -29,7 +29,13 @@ if [ "${1:-}" = "--build" ] || [ ! -f "${FRONTEND_SRC_DIR}/out/index.html" ]; th
     npm run build
 fi
 
-# 4. Khởi chạy FastAPI + AI Core + Next.js UI trên duy nhất 1 cổng PORT
+# 4. Nạp thư viện CUDA 12 / cuDNN 9 cô lập bên trong .venv (nếu đã cài nhóm [gpu])
+NVIDIA_LIB_DIRS="$(find "${BACKEND_DIR}/.venv/lib" -type d -path "*/nvidia/*/lib" 2>/dev/null | paste -sd ':' - || true)"
+if [ -n "${NVIDIA_LIB_DIRS}" ]; then
+    export LD_LIBRARY_PATH="${NVIDIA_LIB_DIRS}:${LD_LIBRARY_PATH:-}"
+fi
+
+# 5. Khởi chạy FastAPI + AI Core + Next.js UI trên duy nhất 1 cổng PORT
 # Dùng exec để tín hiệu Ctrl+C (SIGINT) truyền trực tiếp vào uvicorn và dọn sạch 100% VRAM
 cd "${BACKEND_DIR}"
 echo "[2/2] Đang khởi động ATIN Trần Hân PoC (FastAPI + Next.js + GPU AI) tại http://0.0.0.0:${PORT} ..."
