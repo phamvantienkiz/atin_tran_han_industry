@@ -109,7 +109,11 @@ async def test_config_and_camera_extended_fields_and_reset_stats(tmp_path: Path)
         assert snap_res.headers["X-Latency-Ms"] == "0"
 
 
-def test_detections_websocket_both_routes(tmp_path: Path) -> None:
+def test_detections_websocket_both_routes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "AI_ENABLED", False)
+    monkeypatch.setattr(settings, "NVR_HOST", "")
     repo = JsonCameraRepository(tmp_path / "cameras.json")
     cam_service = CameraService(
         repo=repo,

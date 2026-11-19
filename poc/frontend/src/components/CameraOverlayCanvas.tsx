@@ -18,7 +18,7 @@ const COLOR_MAP: Record<UiColor, { stroke: string; fill: string }> = {
   idle: { stroke: '#0284C7', fill: 'rgba(2, 132, 199, 0.14)' },
 };
 
-const BBOX_STALE_SECONDS = 1.5;
+const BBOX_STALE_SECONDS = 3.0;
 
 function drawRoundedRect(
   ctx: CanvasRenderingContext2D,
@@ -151,13 +151,21 @@ export function CameraOverlayCanvas({
       ctx.lineJoin = 'round';
       ctx.stroke();
 
-      // Vertex dots & find top-most vertex for Polygon Tag Pill
+      // Vertex dots & find best vertex for Polygon Tag Pill (avoiding top-left HUD area)
       let topVertex = { x: zone[0].x * w, y: zone[0].y * h };
+      let bestVisibleVertex: { x: number; y: number } | null = null;
+      const hudBoxW = Math.min(230, w * 0.48);
+      const hudBoxH = Math.min(120, h * 0.42);
+
       for (const pt of zone) {
         const px = pt.x * w;
         const py = pt.y * h;
         if (py < topVertex.y) {
           topVertex = { x: px, y: py };
+        }
+        const insideHud = px < hudBoxW && py < hudBoxH;
+        if (!insideHud && (bestVisibleVertex === null || py < bestVisibleVertex.y)) {
+          bestVisibleVertex = { x: px, y: py };
         }
         ctx.beginPath();
         ctx.arc(px, py, 3.5, 0, Math.PI * 2);
@@ -168,16 +176,17 @@ export function CameraOverlayCanvas({
         ctx.stroke();
       }
 
+      const anchorVertex = bestVisibleVertex || topVertex;
       const fallbackTitle = (currentCam.zone_name || currentCam.name).toUpperCase();
       const polyLabel = det?.polygon_label || fallbackTitle;
       if (polyLabel) {
-        ctx.font = '600 11px Inter, system-ui, sans-serif';
+        ctx.font = '600 10.5px Inter, system-ui, sans-serif';
         const textW = ctx.measureText(polyLabel).width;
-        const padX = 8;
+        const padX = 7;
         const pillW = textW + padX * 2;
-        const pillH = 20;
-        const pillX = Math.max(8, Math.min(w - pillW - 8, topVertex.x - pillW / 2));
-        const pillY = Math.max(8, topVertex.y - pillH - 8);
+        const pillH = 18;
+        const pillX = Math.max(8, Math.min(w - pillW - 8, anchorVertex.x - pillW / 2));
+        const pillY = Math.max(8, anchorVertex.y - pillH - 6);
 
         drawRoundedRect(ctx, pillX, pillY, pillW, pillH, 4);
         ctx.fillStyle = palette.stroke;
@@ -190,9 +199,10 @@ export function CameraOverlayCanvas({
       ctx.restore();
     }
 
-    // 3. Anti-ghosting check before drawing Bounding Boxes
+    // 3. Anti-ghosting check before drawing Bounding Boxes (use client receipt timestamp to avoid clock skew)
     if (!det || !det.persons || det.persons.length === 0) return;
-    const ageSec = Date.now() / 1000 - (det.updated_at || 0);
+    const refTs = det._client_ts || det.updated_at || 0;
+    const ageSec = Date.now() / 1000 - refTs;
     if (ageSec > BBOX_STALE_SECONDS) return;
 
     // 4. Draw person BBoxes (in-zone prominent green vs outside-zone dimmed slate)
@@ -281,7 +291,8 @@ export function CameraOverlayCanvas({
     // Periodic anti-ghosting sweep so stale BBoxes disappear even if stream stops sending
     const ghostTimer = setInterval(() => {
       const det = latestDetRef.current;
-      if (det && det.persons.length > 0 && Date.now() / 1000 - det.updated_at > BBOX_STALE_SECONDS) {
+      const refTs = det ? det._client_ts || det.updated_at || 0 : 0;
+      if (det && det.persons.length > 0 && Date.now() / 1000 - refTs > BBOX_STALE_SECONDS) {
         scheduleDraw();
       }
     }, 1000);

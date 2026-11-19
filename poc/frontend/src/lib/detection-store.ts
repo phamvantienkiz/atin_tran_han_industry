@@ -7,7 +7,16 @@ class DetectionStore {
   private camListeners: Map<string, Set<CameraListener>> = new Map();
 
   updateAll(nextMap: Record<string, CameraDetection>): void {
-    this.data = nextMap || {};
+    const nowSec = Date.now() / 1000;
+    const stamped: Record<string, CameraDetection> = {};
+    if (nextMap) {
+      for (const [camId, det] of Object.entries(nextMap)) {
+        if (det) {
+          stamped[camId] = { ...det, _client_ts: nowSec };
+        }
+      }
+    }
+    this.data = stamped;
     for (const [camId, listeners] of this.camListeners.entries()) {
       const det = this.data[camId] || null;
       listeners.forEach((fn) => fn(det));

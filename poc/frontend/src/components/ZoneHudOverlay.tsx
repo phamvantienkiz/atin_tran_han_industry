@@ -142,30 +142,30 @@ export function ZoneHudOverlay({
 
   return (
     <div
-      className={`absolute top-3 left-3 z-10 pointer-events-none select-none bg-surface-hud backdrop-blur-md rounded-lg border border-white/10 shadow-lg overflow-hidden text-white transition-colors duration-200 ${
-        compact ? 'max-w-[260px] pl-3 pr-2.5 py-2' : 'max-w-[336px] pl-4 pr-3.5 py-2.5'
+      className={`absolute top-2.5 left-2.5 z-10 pointer-events-none select-none bg-surface-hud backdrop-blur-[3px] rounded-md border border-white/15 shadow-md overflow-hidden text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.85)] transition-colors duration-200 ${
+        compact ? 'max-w-[214px] pl-2.5 pr-2 py-1.5' : 'max-w-[262px] pl-3 pr-2.5 py-2'
       }`}
     >
-      {/* Left 4px semantic status accent bar */}
+      {/* Left 3px semantic status accent bar */}
       <span
         aria-hidden="true"
-        className={`absolute left-0 top-0 bottom-0 w-1 transition-colors duration-200 ${ACCENT_BAR_CLASS[hud.uiColor]}`}
+        className={`absolute left-0 top-0 bottom-0 w-[3px] transition-colors duration-200 ${ACCENT_BAR_CLASS[hud.uiColor]}`}
       />
 
       {/* Row 1: Overline */}
-      <div className="text-[10px] font-semibold tracking-wider uppercase text-slate-300 truncate">
+      <div className="text-[9px] font-semibold tracking-wider uppercase text-slate-200/95 truncate">
         GIÁM SÁT NHÂN VIÊN · {zoneTitle}
       </div>
 
       {/* Row 2: Main Status + Dot */}
-      <div className="flex items-center gap-2 mt-0.5">
+      <div className="flex items-center gap-1.5 mt-0.5">
         <span
           aria-hidden="true"
-          className={`w-2.5 h-2.5 rounded-full shrink-0 transition-colors duration-200 ${ACCENT_BAR_CLASS[hud.uiColor]}`}
+          className={`w-2 h-2 rounded-full shrink-0 transition-colors duration-200 ${ACCENT_BAR_CLASS[hud.uiColor]}`}
         />
         <span
           className={`font-bold tracking-tight text-white leading-tight truncate ${
-            compact ? 'text-[13px]' : 'text-[15px]'
+            compact ? 'text-[12px]' : 'text-[13.5px]'
           }`}
         >
           {hud.statusLabel}
@@ -175,27 +175,27 @@ export function ZoneHudOverlay({
       {/* Row 3: Sub-label */}
       <div
         className={`font-medium mt-0.5 tabular-nums truncate ${
-          compact ? 'text-[11px]' : 'text-[12px]'
+          compact ? 'text-[10.5px]' : 'text-[11px]'
         } ${SUB_LABEL_CLASS[hud.uiColor]}`}
       >
         {hud.subLabel}
       </div>
 
       {/* Row 4: KPI stats */}
-      <div className="text-[11px] text-slate-300 mt-1.5 pt-1.5 border-t border-white/10 tabular-nums">
-        Tổng thời gian cảnh báo:{' '}
+      <div className="text-[10px] text-slate-200/95 mt-1 pt-1 border-t border-white/15 tabular-nums truncate">
+        Tổng cảnh báo:{' '}
         <span className="font-semibold text-white">{formatMMSS(hud.totalAlertSecInt)}</span>
         {' · '}
-        Số lần cảnh báo: <span className="font-semibold text-white">{hud.alertCount}</span>
+        Số lần: <span className="font-semibold text-white">{hud.alertCount}</span>
       </div>
 
       {/* Row 5: Rolling 30-min Timeline */}
-      <div className="mt-1.5">
-        <div className="flex items-center justify-between text-[10px] text-slate-400 tabular-nums">
-          <span>Dòng thời gian (30p gần nhất)</span>
-          <span>{formatMMSS(hud.sessionSecInt)}</span>
+      <div className="mt-1">
+        <div className="flex items-center justify-between text-[9px] text-slate-200/90 tabular-nums">
+          <span>Timeline (30p)</span>
+          <span>{formatMMSS(Math.min(1800, hud.sessionSecInt))}</span>
         </div>
-        <div className="h-1.5 w-full bg-slate-800 rounded-xs overflow-hidden flex gap-[1px] mt-1">
+        <div className="h-1 w-full bg-slate-900/65 rounded-xs overflow-hidden flex gap-[1px] mt-0.5">
           {hud.timeline.length === 0 ? (
             <div className="h-full w-full bg-slate-700/70" />
           ) : (

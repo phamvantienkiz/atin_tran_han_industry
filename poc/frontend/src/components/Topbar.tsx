@@ -40,7 +40,7 @@ export function Topbar({
         <div className="flex flex-wrap items-center gap-3 min-w-0">
           <div className="min-w-0">
             <h1 className="text-[16px] font-semibold text-content-heading leading-tight tracking-tight">
-              ATIN Trần Hân
+              ATIN Smart Fishing
             </h1>
             <p className="text-[12px] text-content-secondary leading-tight mt-0.5">
               Giám sát AI nhà máy thủy sản

@@ -19,6 +19,7 @@
 | **ISS-08** | AI Core `aiot` | Convert `yolo26s_best.onnx` → FP16 lỗi kiểu dữ liệu tại node `Resize` | `4490461` · `convert_onnx_fp16.py`, `detector.py` | Đã fix |
 | **ISS-09** | GPU CUDA `aiot` | `onnxruntime-gpu==1.32.0` đòi CUDA 13 (`libcublasLt.so.13`), fallback về CPU | `ec17460` · `pyproject.toml`, `run_server.sh` | Đã fix |
 | **ISS-10** | Vận hành `aiot` | `*.onnx` bị `.gitignore` chặn khi push & lỗi xuống dòng khi paste lệnh dài | `poc/docs/deploy.md` | Đã ghi nhận |
+| **ISS-11** | AI & Live View | `yolo26s_best.onnx` cũ là model PPE 7 class (không có `person`) + lỗi `Clock Skew` ẩn BBox trên trình duyệt & HUD che Polygon | `detector.py`, `config.py`, `detection-store.ts`, `CameraOverlayCanvas.tsx`, `ZoneHudOverlay.tsx`, `Dockerfile`, `docker-compose.yml` | Đã fix |
 
 ---
 
@@ -152,7 +153,24 @@
 
 ### ISS-10: Hai lưu ý vận hành thực tế trên `aiot`
 1. **File model `*.onnx` không đi theo `git push`**:
-   - Do `.gitignore` chặn `*.onnx` và `*.pt`, sau khi `git clone` trên `aiot` bắt buộc phải `scp` (hoặc SFTP qua Termius) file `poc/models/yolo26s_best.onnx` từ laptop lên `/home/tts/projects/tien/atin_tran_han_industry/poc/models/`.
+   - Do `.gitignore` chặn `*.onnx` và `*.pt`, sau khi `git clone` trên `aiot` bắt buộc phải `scp` (hoặc SFTP qua Termius) file `poc/models/yolo26s.onnx` từ laptop lên `/home/tts/projects/tien/atin_tran_han_industry/poc/models/`.
 2. **Dán lệnh nhiều dòng dài trên Termius dễ bị ngắt dòng giữa tham số**:
    - Ví dụ dòng `uv pip install ... --no-deps "onnxruntime-gpu>=1.20.0,<1.24.0"` bị xuống dòng trước tên gói khiến bash tách thành 2 lệnh lỗi (`command not found`).
    - **Quy tắc**: Các lệnh cài đặt hoặc lệnh có tham số dài nên tách rõ từng lệnh ngắn 1 dòng để copy-paste an toàn 100%.
+
+---
+
+### ISS-11: Không thấy BBox người trên Live View (`yolo26s_best.onnx` cũ là model PPE + Lỗi `Clock Skew` ẩn BBox + HUD che Polygon)
+- **Giai đoạn**: Kiểm thử thực tế trên `https://tranhan.atin.vn/` (ảnh [pocv001-ui-report-1.png](file:///e:/ATIN/atin_tran_han_industry/poc/report/pocv001-ui-report-1.png)).
+- **Hiện tượng**:
+  - Giao diện, luồng video MJPEG, Polygon vùng giám sát và bộ đếm thời gian HUD đều chạy nhưng **không thấy BBox nhân viên**, hệ thống báo `KHÔNG CÓ NHÂN VIÊN` liên tục dù trong khung hình có công nhân.
+  - Khối HUD góc trên-trái có độ mờ thấp (`0.82`) và kích thước lớn nên che khuất phần đa giác vùng giám sát và nhãn Polygon (`TĂNG TRỌNG 2 · KHÔNG CÓ NHÂN VIÊN`) phía sau.
+- **Nguyên nhân gốc**:
+  1. **Nhầm file model ONNX**: File `yolo26s_best.onnx` trước đó có metadata `names = {0: 'glove', 1: 'hairnet', 2: 'incorrect_mask', 3: 'mask', 4: 'no_glove', 5: 'no_hairnet', 6: 'no_mask'}` (model PPE 7 class, không có class `person`). Đã được thay thế bằng bộ model mới fine-tune riêng cho công nhân nhà máy (`poc/models/yolo26s.onnx` và `poc/models/yolo26s.pt`, trained trên `factory_person_dataset/data.yaml`, output `[1, 5, 8400]`, `names = {0: 'person'}` — test trên `ch17-snapshot.jpg` bắt chính xác 6/6 công nhân, 2 người trong vùng).
+  2. **Lệch đồng hồ Server vs Client (`Clock Skew`) trong `CameraOverlayCanvas.tsx`**: Code cũ tính `ageSec = Date.now() / 1000 - det.updated_at` (lấy đồng hồ trình duyệt máy khách trừ `time.time()` của server `aiot` với ngưỡng `1.5s`). Chỉ cần đồng hồ server chậm hơn máy khách `> 1.5s`, Canvas sẽ coi mọi gói BBox vừa nhận là "cũ" và tự động `return` không vẽ.
+  3. **HUD thiếu độ trong suốt & Nhãn Polygon trùng góc HUD**: Nền HUD `rgba(15, 23, 42, 0.82)` quá đặc và đỉnh cao nhất của đa giác `ch17` rơi vào góc trên-trái của HUD.
+- **Cách fix**:
+  1. Cập nhật [config.py](file:///e:/ATIN/atin_tran_han_industry/poc/backend/app/core/config.py) & [detector.py](file:///e:/ATIN/atin_tran_han_industry/poc/backend/app/ai/detector.py) ưu tiên nạp `poc/models/yolo26s.onnx` (`{0: 'person'}`) và log rõ danh sách `classes` khi khởi tạo.
+  2. Cập nhật [detection-store.ts](file:///e:/ATIN/atin_tran_han_industry/poc/frontend/src/lib/detection-store.ts) đóng dấu `_client_ts = Date.now() / 1000` ngay khi trình duyệt nhận gói WebSocket và dùng `_client_ts` trong [CameraOverlayCanvas.tsx](file:///e:/ATIN/atin_tran_han_industry/poc/frontend/src/components/CameraOverlayCanvas.tsx) để triệt tiêu 100% lỗi lệch đồng hồ.
+  3. Tăng độ trong suốt của HUD (`rgba(15, 23, 42, 0.44)`, `backdrop-blur-[3px]`) và thu gọn kích thước HUD trong [ZoneHudOverlay.tsx](file:///e:/ATIN/atin_tran_han_industry/poc/frontend/src/components/ZoneHudOverlay.tsx) để nhìn xuyên thấu rõ ràng vùng Polygon và nhân viên phía sau; tự động chọn đỉnh Polygon ngoài vùng HUD để đặt nhãn Pill.
+  4. Bổ sung Multi-stage [Dockerfile](file:///e:/ATIN/atin_tran_han_industry/poc/backend/Dockerfile) + [docker-compose.yml](file:///e:/ATIN/atin_tran_han_industry/poc/backend/docker-compose.yml) (Node 20 build Next.js + `nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04` chạy FastAPI & `onnxruntime-gpu` trên đúng cổng `28080`) và tích hợp lệnh `./scripts/run_server.sh docker` / `./scripts/run_server.sh stop` để cô lập môi trường 100%.

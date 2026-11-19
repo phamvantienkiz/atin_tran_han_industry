@@ -90,10 +90,17 @@ class YoloPersonDetector:
                     providers=providers,
                 )
             except Exception as exc:
-                fallback_path = self.model_path.parent / "yolo26s_best.onnx"
-                if self.model_path.name == "yolo26s_fp16.onnx" and fallback_path.is_file():
+                fallback_candidates = [
+                    self.model_path.parent / "yolo26s.onnx",
+                    self.model_path.parent / "yolo26s_best.onnx",
+                ]
+                fallback_path = next(
+                    (p for p in fallback_candidates if p != self.model_path and p.is_file()),
+                    None,
+                )
+                if fallback_path is not None:
                     logger.warning(
-                        "Failed to load FP16 model %s (%s); falling back to FP32 model %s",
+                        "Failed to load model %s (%s); falling back to %s",
                         self.model_path.name,
                         exc,
                         fallback_path.name,
@@ -113,14 +120,18 @@ class YoloPersonDetector:
             active_providers = session.get_providers()
             self.active_provider = active_providers[0] if active_providers else "CPUExecutionProvider"
 
+            meta_map = session.get_modelmeta().custom_metadata_map or {}
+            model_names = meta_map.get("names", "unknown")
+
             # Warmup pass to initialize CUDA context & cuDNN kernels before live stream hits
             dummy = np.zeros((1, 3, self.imgsz, self.imgsz), dtype=np.float32)
             session.run(None, {self._input_name: dummy})
 
             self._session = session
             logger.info(
-                "Loaded YOLO ONNX model=%s active_provider=%s dynamic_batch=%s vram_limit_mb=%s",
+                "Loaded YOLO ONNX model=%s classes=%s active_provider=%s dynamic_batch=%s vram_limit_mb=%s",
                 self.model_path.name,
+                model_names,
                 self.active_provider,
                 self._dynamic_batch,
                 self.vram_limit_mb if "CUDA" in self.active_provider else 0,

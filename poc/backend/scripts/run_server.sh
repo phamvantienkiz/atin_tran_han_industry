@@ -24,7 +24,7 @@ fi
 
 PORT="${PORT:-28080}"
 
-# 3. Nạp thư viện CUDA 12 / cuDNN 9 cô lập bên trong .venv (nếu đã cài nhóm [gpu])
+# 3. Nạp thư viện CUDA 12 / cuDNN 9 cô lập bên trong .venv (nếu chạy trực tiếp không qua Docker)
 NVIDIA_LIB_DIRS="$(find "${BACKEND_DIR}/.venv/lib" -type d -path "*/nvidia/*/lib" 2>/dev/null | paste -sd ':' - || true)"
 if [ -n "${NVIDIA_LIB_DIRS}" ]; then
     export LD_LIBRARY_PATH="${NVIDIA_LIB_DIRS}:${LD_LIBRARY_PATH:-}"
@@ -53,34 +53,61 @@ is_running() {
     return 1
 }
 
-stop_server() {
-    if ! is_running; then
+stop_native_server() {
+    if is_running; then
+        local pid
+        pid="$(cat "${PID_FILE}")"
+        echo "[STOP] Đang dừng tiến trình chạy nền non-Docker (PID ${pid})..."
+        kill -INT -- "-${pid}" 2>/dev/null || kill -INT "${pid}" 2>/dev/null || true
+
+        for _ in $(seq 1 10); do
+            if ! kill -0 "${pid}" 2>/dev/null; then
+                rm -f "${PID_FILE}"
+                echo "[OK] Đã dừng tiến trình non-Docker (PID ${pid})."
+                return 0
+            fi
+            sleep 0.5
+        done
+
+        echo "[WARN] Tiến trình ${pid} chưa thoát sau 5s, ép dừng (SIGKILL)..."
+        kill -KILL -- "-${pid}" 2>/dev/null || kill -KILL "${pid}" 2>/dev/null || true
         rm -f "${PID_FILE}"
-        echo "[INFO] Server hiện không chạy."
-        return 0
+    else
+        rm -f "${PID_FILE}"
     fi
-    local pid
-    pid="$(cat "${PID_FILE}")"
-    echo "[STOP] Đang gửi tín hiệu dừng (SIGINT) tới tiến trình PID ${pid}..."
-    kill -INT -- "-${pid}" 2>/dev/null || kill -INT "${pid}" 2>/dev/null || true
+}
 
-    for _ in $(seq 1 10); do
-        if ! kill -0 "${pid}" 2>/dev/null; then
-            rm -f "${PID_FILE}"
-            echo "[OK] Đã dừng server và giải phóng port ${PORT} + VRAM."
-            return 0
+stop_docker_server() {
+    if command -v docker >/dev/null 2>&1; then
+        cd "${BACKEND_DIR}"
+        if docker ps -a --format '{{.Names}}' 2>/dev/null | grep -q '^tranhan_ai_poc$'; then
+            echo "[STOP] Đang dừng và gỡ container Docker tranhan_ai_poc..."
+            docker compose down --remove-orphans
+            echo "[OK] Đã dừng sạch Docker container tranhan_ai_poc."
         fi
-        sleep 0.5
-    done
+    fi
+}
 
-    echo "[WARN] Tiến trình ${pid} chưa thoát sau 5s, ép dừng cả nhóm tiến trình (SIGKILL)..."
-    kill -KILL -- "-${pid}" 2>/dev/null || kill -KILL "${pid}" 2>/dev/null || true
-    rm -f "${PID_FILE}"
-    echo "[OK] Đã buộc dừng PID ${pid}."
+stop_server() {
+    stop_native_server
+    stop_docker_server
+    echo "[OK] Đã giải phóng hoàn toàn port ${PORT} và VRAM của PoC."
+}
+
+start_docker() {
+    stop_native_server
+    cd "${BACKEND_DIR}"
+    echo "[DOCKER] Đang build & khởi chạy container tranhan_ai_poc trên cổng ${PORT}..."
+    docker compose up -d --build
+    echo "[OK] Container tranhan_ai_poc đã chạy nền 24/7 trên port ${PORT}!"
+    echo "     Xem log   : docker compose logs -f"
+    echo "     Trạng thái: ./scripts/run_server.sh status"
+    echo "     Dừng hẳn  : ./scripts/run_server.sh stop  (hoặc: docker compose down)"
 }
 
 start_background() {
     local force_build="${1:-false}"
+    stop_docker_server
     if is_running; then
         echo "[INFO] Server đang chạy rồi (PID $(cat "${PID_FILE}"), port ${PORT}). Dùng './scripts/run_server.sh restart' để khởi động lại."
         return 0
@@ -110,14 +137,20 @@ start_background() {
 }
 
 show_status() {
+    if command -v docker >/dev/null 2>&1 && docker ps --format '{{.Names}}' 2>/dev/null | grep -q '^tranhan_ai_poc$'; then
+        echo "[RUNNING - DOCKER] Container tranhan_ai_poc đang chạy trên port ${PORT}:"
+        docker ps --filter "name=tranhan_ai_poc"
+        nvidia-smi --query-compute-apps=pid,process_name,used_memory --format=csv 2>/dev/null || true
+        return 0
+    fi
     if is_running; then
         local pid
         pid="$(cat "${PID_FILE}")"
-        echo "[RUNNING] ATIN Trần Hân PoC đang chạy (PID ${pid}, port ${PORT})."
+        echo "[RUNNING - NATIVE] ATIN Trần Hân PoC đang chạy (PID ${pid}, port ${PORT})."
         ss -tulpn 2>/dev/null | grep ":${PORT} " || true
         nvidia-smi --query-compute-apps=pid,process_name,used_memory --format=csv 2>/dev/null | grep -E "pid|${pid}" || true
     else
-        echo "[STOPPED] ATIN Trần Hân PoC đang dừng."
+        echo "[STOPPED] ATIN Trần Hân PoC hiện đang dừng (cả Docker lẫn Native)."
     fi
 }
 
@@ -129,6 +162,12 @@ if [ "${ACTION}" = "--build" ] || [ "${FLAG}" = "--build" ]; then
 fi
 
 case "${ACTION}" in
+    docker|docker-start)
+        start_docker
+        ;;
+    docker-stop)
+        stop_docker_server
+        ;;
     start)
         start_background "${FORCE_BUILD}"
         ;;
@@ -143,15 +182,17 @@ case "${ACTION}" in
         show_status
         ;;
     logs)
-        touch "${LOG_FILE}"
-        echo "[INFO] Đang xem log (${LOG_FILE}) — bấm Ctrl+C để thoát xem log (server vẫn tiếp tục chạy nền)..."
-        tail -n 50 -f "${LOG_FILE}"
+        if command -v docker >/dev/null 2>&1 && docker ps --format '{{.Names}}' 2>/dev/null | grep -q '^tranhan_ai_poc$'; then
+            cd "${BACKEND_DIR}"
+            docker compose logs -f --tail=50
+        else
+            touch "${LOG_FILE}"
+            echo "[INFO] Đang xem log (${LOG_FILE}) — bấm Ctrl+C để thoát xem log (server vẫn tiếp tục chạy nền)..."
+            tail -n 50 -f "${LOG_FILE}"
+        fi
         ;;
     fg|--build)
-        if is_running; then
-            echo "[WARN] Đang có bản chạy nền (PID $(cat "${PID_FILE}")). Hãy chạy './scripts/run_server.sh stop' trước khi chạy foreground." >&2
-            exit 1
-        fi
+        stop_server
         build_frontend_if_needed "${FORCE_BUILD}"
         cd "${BACKEND_DIR}"
         echo "[2/2] Đang khởi động ATIN Trần Hân PoC (foreground) tại http://0.0.0.0:${PORT} ..."
@@ -161,7 +202,7 @@ case "${ACTION}" in
             --timeout-graceful-shutdown 2
         ;;
     *)
-        echo "Cách dùng: $0 [start|stop|restart|status|logs|--build] [--build]"
+        echo "Cách dùng: $0 [docker|start|stop|restart|status|logs|--build] [--build]"
         exit 1
         ;;
 esac

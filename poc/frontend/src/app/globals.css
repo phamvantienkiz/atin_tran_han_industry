@@ -14,7 +14,7 @@
   --surface-subtle-hover-rgb: 226 232 240;
   --surface-video: #000000;
   --surface-video-rgb: 0 0 0;
-  --surface-hud: rgba(15, 23, 42, 0.82);
+  --surface-hud: rgba(15, 23, 42, 0.44);
 
   /* Brand & Interactive */
   --brand-primary: #0284c7;

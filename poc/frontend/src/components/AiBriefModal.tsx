@@ -60,7 +60,7 @@ export function AiBriefModal({ open, onClose }: AiBriefModalProps) {
               Bài toán giám sát AI
             </h2>
             <p className="text-[12px] text-content-secondary mt-0.5">
-              Đối chiếu luồng camera thực tế với 4 yêu cầu từ Nhà máy Thủy sản Trần Hân
+              Đối chiếu luồng camera thực tế với 4 bài toán giám sát ATIN Smart Fishing
             </p>
           </div>
           <button

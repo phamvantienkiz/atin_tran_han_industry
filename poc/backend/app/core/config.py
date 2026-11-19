@@ -11,32 +11,23 @@ def _resolve_path(raw: str) -> Path:
     return path if path.is_absolute() else (BACKEND_ROOT / path).resolve()
 
 
-def _cuda_provider_available() -> bool:
-    try:
-        import onnxruntime as ort
-
-        return "CUDAExecutionProvider" in ort.get_available_providers()
-    except Exception:  # noqa: BLE001
-        return False
-
-
 class Settings(BaseSettings):
     """Centralized application settings loaded from `.env`."""
 
     # --- App & Server ---
-    APP_NAME: str = "ATIN Tran Han AI Backend"
+    APP_NAME: str = "ATIN Smart Fishing"
     ENVIRONMENT: str = "poc"
     DEBUG: bool = True
     PORT: int = 28080
     API_V1_PREFIX: str = "/api/v1"
-    PROJECT_DISPLAY_NAME: str = "Nhà máy Thủy sản Trần Hân"
+    PROJECT_DISPLAY_NAME: str = "ATIN Smart Fishing"
     SERVE_FRONTEND: bool = True
 
     # --- Paths ---
     FRONTEND_DIR: str = "../frontend/out"
     FRONTEND_LEGACY_DIR: str = "../frontend"
     CAMERAS_FILE: str = "../data/cameras.json"
-    MODEL_PATH: str = "../models/yolo26s_best.onnx"
+    MODEL_PATH: str = "../models/yolo26s.onnx"
     STORAGES_DIR: str = "../storages"
 
     # --- Security & CORS ---
@@ -121,18 +112,18 @@ class Settings(BaseSettings):
     def model_file_path(self) -> Path:
         configured = _resolve_path(self.MODEL_PATH)
         models_dir = configured.parent
-        fp16_path = models_dir / "yolo26s_fp16.onnx"
-        best_path = models_dir / "yolo26s_best.onnx"
         default_path = models_dir / "yolo26s.onnx"
+        best_path = models_dir / "yolo26s_best.onnx"
+        fp16_path = models_dir / "yolo26s_fp16.onnx"
 
-        want_cuda = self.AI_RUNTIME.lower() in ("auto", "onnx_cuda") and _cuda_provider_available()
-        if want_cuda and fp16_path.is_file():
-            return fp16_path
+        # Prefer the factory-person model yolo26s.onnx even if an older .env points to yolo26s_fp16/best
+        if configured.name in ("yolo26s_fp16.onnx", "yolo26s_best.onnx") and default_path.is_file():
+            return default_path
 
         if configured.is_file():
             return configured
 
-        for candidate in (best_path, default_path, fp16_path):
+        for candidate in (default_path, best_path, fp16_path):
             if candidate.is_file():
                 return candidate
         return configured

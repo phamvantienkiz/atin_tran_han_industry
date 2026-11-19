@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'ATIN Trần Hân — Giám sát AI',
-  description: 'Hệ thống giám sát AI thời gian thực Nhà máy Thủy sản Trần Hân',
+  title: 'ATIN Smart Fishing — Giám sát AI',
+  description: 'Hệ thống giám sát AI thời gian thực ATIN Smart Fishing',
 };
 
 export default function RootLayout({

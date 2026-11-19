@@ -229,6 +229,7 @@ customers/
 docs/ai/
 docs/note/
 poc/docs/linkcam.md
+poc/report/
 .vscode/
 runs/
 *.cache

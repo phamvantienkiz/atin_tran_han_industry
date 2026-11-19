@@ -1,0 +1,15 @@
+# Exclude local virtualenvs, node_modules, caches, and runtime data from Docker build context
+backend/.venv
+backend/logs
+backend/.pytest_cache
+backend/.ruff_cache
+backend/*.egg-info
+frontend/node_modules
+frontend/.next
+frontend/out
+models
+storages
+report
+docs
+**/__pycache__
+**/*.pyc

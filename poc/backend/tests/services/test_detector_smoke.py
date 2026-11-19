@@ -8,7 +8,7 @@ from app.ai.rule_engine import ZoneRuleEngine
 from app.ai.tracker import CameraTracker
 
 POC_ROOT = Path(__file__).resolve().parents[3]
-MODEL_PATH = POC_ROOT / "models" / "yolo26s_best.onnx"
+MODEL_PATH = POC_ROOT / "models" / "yolo26s.onnx"
 SAMPLE_IMG = POC_ROOT / "report" / "ch17-snapshot.jpg"
 
 
@@ -37,7 +37,9 @@ def test_yolo_detector_tracker_rule_engine_pipeline_on_real_frame() -> None:
     ev2 = engine.evaluate("ch17", tracked_2, zone, now=1.1, wall_time=100.1, zone_name="Tăng trọng 2")
 
     assert ev1.has_zone is True
-    assert ev2.ui_color in ("green", "yellow", "red")
+    assert len(batch[0]) >= 3
+    assert ev2.in_zone_count >= 1
+    assert ev2.ui_color == "green"
     for p in ev2.persons:
         assert 0.0 <= p["foot_x"] <= 1.0
         assert 0.0 <= p["foot_y"] <= 1.0

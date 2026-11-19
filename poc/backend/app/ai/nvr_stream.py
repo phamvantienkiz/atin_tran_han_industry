@@ -155,10 +155,9 @@ class NvrChannelReader:
                 )
             return True
 
-        # Keep JPEG fresh for MJPEG web clients even between AI decode intervals
+        # Keep JPEG fresh for MJPEG web clients without bumping AI decode seq
         with self._lock:
             if self._latest is not None:
-                self._seq += 1
                 self._latest = NvrFramePacket(
                     cam_id=self.cam_id,
                     channel=self.channel,

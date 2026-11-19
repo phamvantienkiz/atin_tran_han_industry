@@ -1,46 +1,28 @@
 services:
-  backend:
-    build: .
+  tranhan-poc:
+    container_name: tranhan_ai_poc
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
     ports:
-      - "8000:8000"
+      - "${PORT:-28080}:28080"
+    gpus: all
     env_file:
       - .env
     environment:
-      CAMERAS_FILE: /data/cameras.json
-      MODEL_PATH: /models/yolo26s.onnx
-      STORAGES_DIR: /storages
-      FRONTEND_DIR: /frontend
+      APP_NAME: "ATIN Smart Fishing"
+      PROJECT_DISPLAY_NAME: "ATIN Smart Fishing"
+      PORT: "28080"
+      SERVE_FRONTEND: "true"
+      FRONTEND_DIR: /app/frontend/out
+      CAMERAS_FILE: /app/data/cameras.json
+      MODEL_PATH: /app/models/yolo26s.onnx
+      STORAGES_DIR: /app/storages
+      AI_RUNTIME: auto
+      AI_VRAM_LIMIT_MB: "1024"
     volumes:
-      - ./app:/app/app
-      - ../data:/data
-      - ../models:/models:ro
-      - ../storages:/storages
-      - ../frontend:/frontend:ro
-    command:
-      [
-        "uvicorn",
-        "app.main:app",
-        "--host",
-        "0.0.0.0",
-        "--port",
-        "8000",
-        "--reload",
-        "--timeout-graceful-shutdown",
-        "2",
-      ]
-    depends_on:
-      - db
-
-  db:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: tranhan_ai
-    ports:
-      - "5432:5432"
-    volumes:
-      - db_data:/var/lib/postgresql/data
-
-volumes:
-  db_data:
+      - ../data:/app/data
+      - ../models:/app/models:ro
+      - ../storages:/app/storages
+      - ./logs:/app/backend/logs
+    restart: unless-stopped

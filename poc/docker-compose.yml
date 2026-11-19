@@ -1,0 +1,28 @@
+services:
+  tranhan-poc:
+    container_name: tranhan_ai_poc
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "28080:28080"
+    gpus: all
+    env_file:
+      - ./backend/.env
+    environment:
+      APP_NAME: "ATIN Smart Fishing"
+      PROJECT_DISPLAY_NAME: "ATIN Smart Fishing"
+      PORT: "28080"
+      SERVE_FRONTEND: "true"
+      FRONTEND_DIR: /app/frontend/out
+      CAMERAS_FILE: /app/data/cameras.json
+      MODEL_PATH: /app/models/yolo26s.onnx
+      STORAGES_DIR: /app/storages
+      AI_RUNTIME: auto
+      AI_VRAM_LIMIT_MB: "1024"
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models:ro
+      - ./storages:/app/storages
+      - ./backend/logs:/app/backend/logs
+    restart: unless-stopped

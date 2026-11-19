@@ -91,6 +91,7 @@ export interface CameraDetection {
   inference_ms?: number;
   active_provider?: string;
   updated_at: number;
+  _client_ts?: number;
   error?: string;
 }
 
