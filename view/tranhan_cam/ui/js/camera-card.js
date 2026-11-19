@@ -1,5 +1,5 @@
 import { api } from './api.js';
-import { drawCardOverlay } from './overlay.js';
+import { drawCardOverlay, renderAiHud } from './overlay.js';
 import { ZoneEditor } from './zone-editor.js';
 
 const STATE_LABELS = {
@@ -77,9 +77,19 @@ export class CameraCard {
           <span class="dot"></span>
           <span class="badge-text">${STATE_LABELS.connecting}</span>
         </div>
-        <div class="zone-status-badge" data-state="idle">
-          <span class="dot"></span>
-          <span class="zone-badge-text">${(cam.zone && cam.zone.length >= 3) ? 'Đang quét...' : 'Chưa vẽ vùng'}</span>
+        <div class="ai-hud hidden" data-state="idle">
+          <div class="ai-hud-kicker">GIÁM SÁT AI</div>
+          <div class="ai-hud-status">
+            <span class="dot"></span>
+            <span class="ai-hud-status-text">ĐANG QUÉT...</span>
+          </div>
+          <div class="ai-hud-sub">–</div>
+          <div class="ai-hud-stats">Tổng thời gian cảnh báo: 00:00 · Số lần: 0</div>
+          <div class="ai-hud-timeline-head">
+            <span>Dòng thời gian</span>
+            <span class="ai-hud-elapsed">00:00</span>
+          </div>
+          <div class="ai-hud-timeline"></div>
         </div>
         <div class="viewport-fallback hidden">
           <p>Không thể kết nối luồng video từ kênh ${cam.channel}</p>
@@ -108,8 +118,13 @@ export class CameraCard {
     this.canvas = this.el.querySelector('canvas');
     this.badge = this.el.querySelector('.stream-badge');
     this.badgeText = this.el.querySelector('.badge-text');
-    this.zoneBadge = this.el.querySelector('.zone-status-badge');
-    this.zoneBadgeText = this.el.querySelector('.zone-badge-text');
+    this.aiHud = this.el.querySelector('.ai-hud');
+    this.aiHudKicker = this.el.querySelector('.ai-hud-kicker');
+    this.aiHudStatusText = this.el.querySelector('.ai-hud-status-text');
+    this.aiHudSub = this.el.querySelector('.ai-hud-sub');
+    this.aiHudStats = this.el.querySelector('.ai-hud-stats');
+    this.aiHudElapsed = this.el.querySelector('.ai-hud-elapsed');
+    this.aiHudTimeline = this.el.querySelector('.ai-hud-timeline');
     this.fallbackEl = this.el.querySelector('.viewport-fallback');
     this.latencyEl = this.el.querySelector('.m-latency');
     this.zoneToolbar = this.el.querySelector('.zone-toolbar');
@@ -150,24 +165,8 @@ export class CameraCard {
 
   setDetection(det) {
     this.detection = det || null;
-    if (!this.cam.zone || this.cam.zone.length < 3) {
-      this.zoneBadge.dataset.state = 'idle';
-      this.zoneBadgeText.textContent = 'Chưa vẽ vùng';
-    } else if (!det) {
-      this.zoneBadge.dataset.state = 'idle';
-      this.zoneBadgeText.textContent = 'Đang quét...';
-    } else if (det.error) {
-      this.zoneBadge.dataset.state = 'idle';
-      this.zoneBadgeText.textContent = 'Lỗi quét AI';
-    } else if (det.person_in_zone) {
-      this.zoneBadge.dataset.state = 'alert';
-      this.zoneBadgeText.textContent = `Có người trong vùng (${det.in_zone_count})`;
-    } else {
-      this.zoneBadge.dataset.state = 'clear';
-      this.zoneBadgeText.textContent = det.total_persons > 0
-        ? `Vùng trống (${det.total_persons} ngoài vùng)`
-        : 'Vùng trống';
-    }
+    renderAiHud(this.aiHud, this.cam, this.detection);
+    this.badge.classList.toggle('badge-right', Boolean(this.detection));
     drawCardOverlay(this);
   }
 

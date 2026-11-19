@@ -196,6 +196,22 @@
       </div>
       <div class="focus-viewport">
         <img id="focus-img" alt="Luồng camera phóng to" />
+        <canvas id="focus-canvas"></canvas>
+        <div id="focus-ai-hud" class="ai-hud ai-hud-lg hidden" data-state="idle">
+          <div class="ai-hud-kicker">GIÁM SÁT AI</div>
+          <div class="ai-hud-status">
+            <span class="dot"></span>
+            <span class="ai-hud-status-text">ĐANG QUÉT...</span>
+          </div>
+          <div class="ai-hud-sub">–</div>
+          <div class="ai-hud-stats">Tổng thời gian cảnh báo: 00:00 · Số lần: 0</div>
+          <div class="ai-hud-timeline-head">
+            <span>Dòng thời gian</span>
+            <span class="ai-hud-elapsed">00:00</span>
+          </div>
+          <div class="ai-hud-timeline"></div>
+        </div>
+        <div id="focus-cam-label" class="cam-overlay-label"></div>
       </div>
     </div>
   </div>
@@ -244,6 +260,15 @@
             </select>
           </label>
         </div>
+        <label class="field">
+          <span>Model AI (YOLO26)</span>
+          <select id="cam-ai-task">
+            <option value="auto">Tự động theo tên camera</option>
+            <option value="cam1_ppe">Cam 1 · Bảo hộ lao động (PPE)</option>
+            <option value="cam2_person">Cam 2 · Người trong vùng máy tăng trọng</option>
+            <option value="none">Không chạy AI</option>
+          </select>
+        </label>
 
         <div id="cam-extra-tools" class="extra-tools hidden">
           <label class="field">

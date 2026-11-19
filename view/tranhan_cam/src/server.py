@@ -119,6 +119,7 @@ class CameraCreate(BaseModel):
     note: str = Field(default="", max_length=240)
     subtype: int = Field(default=1, ge=0, le=2)
     mode: str = Field(default="mjpeg", pattern="^(mjpeg|snapshot)$")
+    ai_task: str = Field(default="auto", pattern="^(auto|none|cam1_ppe|cam2_person)$")
     enabled: bool = True
 
 
@@ -128,6 +129,7 @@ class CameraUpdate(BaseModel):
     note: str | None = Field(default=None, max_length=240)
     subtype: int | None = Field(default=None, ge=0, le=2)
     mode: str | None = Field(default=None, pattern="^(mjpeg|snapshot)$")
+    ai_task: str | None = Field(default=None, pattern="^(auto|none|cam1_ppe|cam2_person)$")
     enabled: bool | None = None
 
 
@@ -142,7 +144,10 @@ class ZonePayload(BaseModel):
 
 media = MediaManager(BASE_DIR / "storages", NVR_BASE_URL, NVR_USER, NVR_PASS)
 detector = PersonZoneDetector(
-    model_path=BASE_DIR / "models" / "yolo26s.onnx",
+    model_paths={
+        "cam1_ppe": BASE_DIR / "models" / "Cam1_BaoHoLaoDong" / "yolo26s_best.onnx",
+        "cam2_person": BASE_DIR / "models" / "Cam2_MayTangTrong" / "yolo26s.onnx",
+    },
     nvr_base_url=NVR_BASE_URL,
     nvr_user=NVR_USER,
     nvr_pass=NVR_PASS,
@@ -203,6 +208,7 @@ async def create_camera(payload: CameraCreate) -> dict[str, Any]:
         "note": payload.note.strip(),
         "subtype": payload.subtype,
         "mode": payload.mode,
+        "ai_task": payload.ai_task,
         "enabled": payload.enabled,
         "zone": [],
     }

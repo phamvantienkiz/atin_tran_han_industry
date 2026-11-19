@@ -1,7 +1,7 @@
 import { api } from './api.js';
 import { CameraCard } from './camera-card.js';
 import { DatasetPage } from './dataset-page.js';
-import { drawCardOverlay } from './overlay.js';
+import { drawCardOverlay, drawOverlay, renderAiHud } from './overlay.js';
 import { parseZoneJson } from './zone-editor.js';
 
 const gridEl = document.getElementById('camera-grid');
@@ -19,6 +19,9 @@ const focusModal = document.getElementById('focus-modal');
 const focusTitle = document.getElementById('focus-modal-title');
 const focusSub = document.getElementById('focus-modal-sub');
 const focusImg = document.getElementById('focus-img');
+const focusCanvas = document.getElementById('focus-canvas');
+const focusAiHud = document.getElementById('focus-ai-hud');
+const focusCamLabel = document.getElementById('focus-cam-label');
 const focusDownload = document.getElementById('focus-download');
 const btnFocusRecord = document.getElementById('btn-focus-record');
 const btnFocusRecordLabel = document.getElementById('btn-focus-record-label');
@@ -33,6 +36,7 @@ const camNameInput = document.getElementById('cam-name');
 const camNoteInput = document.getElementById('cam-note');
 const camModeInput = document.getElementById('cam-mode');
 const camSubtypeInput = document.getElementById('cam-subtype');
+const camAiTaskInput = document.getElementById('cam-ai-task');
 const camExtraTools = document.getElementById('cam-extra-tools');
 const camZoneJson = document.getElementById('cam-zone-json');
 const btnDeleteCam = document.getElementById('btn-delete-cam');
@@ -116,6 +120,7 @@ function openFocusModal(cam) {
   focusRetries = 0;
   focusTitle.textContent = cam.name;
   focusSub.textContent = cam.note ? `Kênh ${cam.channel} · ${cam.note}` : `Kênh ${cam.channel}`;
+  focusCamLabel.textContent = `${cam.channel}. ${cam.name}`;
   focusDownload.href = `/api/cameras/${cam.id}/snapshot.jpg`;
   focusDownload.download = `${cam.id}-snapshot.jpg`;
   recordMenu.classList.add('hidden');
@@ -125,6 +130,9 @@ function openFocusModal(cam) {
   cards[cam.id]?.stopStream();
 
   focusModal.classList.remove('hidden');
+  const currentDet = cards[cam.id]?.detection || null;
+  renderAiHud(focusAiHud, cam, currentDet);
+  requestAnimationFrame(() => drawOverlay(focusCanvas, cam, currentDet));
   syncRecordUi();
   setFocusSubtype(0, 150);
 }
@@ -147,6 +155,10 @@ function setFocusSubtype(subtype, delayMs = 0) {
 
 focusImg.addEventListener('load', () => {
   focusRetries = 0;
+  if (focusCam) {
+    const det = cards[focusCam.id]?.detection || null;
+    drawOverlay(focusCanvas, focusCam, det);
+  }
 });
 
 focusImg.addEventListener('error', () => {
@@ -220,6 +232,7 @@ function openCamModal(card) {
     camNoteInput.value = card.cam.note || '';
     camModeInput.value = card.cam.mode || 'mjpeg';
     camSubtypeInput.value = String(card.cam.subtype ?? 1);
+    camAiTaskInput.value = card.cam.ai_task || 'auto';
     camZoneJson.value = JSON.stringify(card.cam.zone || []);
     camExtraTools.classList.remove('hidden');
     btnDeleteCam.classList.remove('hidden');
@@ -231,6 +244,7 @@ function openCamModal(card) {
     camNoteInput.value = '';
     camModeInput.value = 'mjpeg';
     camSubtypeInput.value = '1';
+    camAiTaskInput.value = 'auto';
     camExtraTools.classList.add('hidden');
     btnDeleteCam.classList.add('hidden');
   }
@@ -373,6 +387,7 @@ camForm.addEventListener('submit', async (e) => {
     note: camNoteInput.value.trim(),
     mode: camModeInput.value,
     subtype: Number(camSubtypeInput.value),
+    ai_task: camAiTaskInput.value,
   };
 
   const submitBtn = camForm.querySelector('button[type="submit"]');
@@ -430,6 +445,9 @@ btnImportZone.addEventListener('click', async () => {
 
 window.addEventListener('resize', () => {
   Object.values(cards).forEach((c) => drawCardOverlay(c));
+  if (focusCam && !focusModal.classList.contains('hidden')) {
+    drawOverlay(focusCanvas, focusCam, cards[focusCam.id]?.detection || null);
+  }
 });
 
 async function pollDetections() {
@@ -438,6 +456,11 @@ async function pollDetections() {
     Object.entries(cards).forEach(([camId, card]) => {
       card.setDetection(data[camId] || null);
     });
+    if (focusCam && !focusModal.classList.contains('hidden')) {
+      const det = data[focusCam.id] || null;
+      renderAiHud(focusAiHud, focusCam, det);
+      drawOverlay(focusCanvas, focusCam, det);
+    }
   } catch (_) {}
 }
 

@@ -1,4 +1,4 @@
-"""YOLO26 CPU person-in-zone detector for ATIN Tran Han Live View."""
+"""YOLO26 CPU multi-model detector (Cam1 PPE + Cam2 Person-in-Zone) for ATIN Tran Han Live View."""
 
 from __future__ import annotations
 
@@ -11,6 +11,8 @@ import cv2
 import httpx
 import numpy as np
 from ultralytics import YOLO
+
+PPE_VIOLATION_CLASSES = {"incorrect_mask", "no_glove", "no_hairnet", "no_mask"}
 
 
 def point_in_polygon(px: float, py: float, polygon: list[dict[str, float]]) -> bool:
@@ -33,12 +35,26 @@ def point_in_polygon(px: float, py: float, polygon: list[dict[str, float]]) -> b
     return inside
 
 
+def resolve_camera_task(cam: dict[str, Any]) -> str:
+    """Resolve which AI task ('cam1_ppe', 'cam2_person', or 'none') applies to a camera."""
+    explicit = (cam.get("ai_task") or "auto").strip()
+    if explicit in {"none", "cam1_ppe", "cam2_person"}:
+        return explicit
+
+    text = f"{cam.get('name', '')} {cam.get('note', '')}".lower()
+    if "bảo hộ" in text or "bao ho" in text or "ppe" in text or "định hình" in text or "dinh hinh" in text:
+        return "cam1_ppe"
+    if "tăng trọng" in text or "tang trong" in text:
+        return "cam2_person"
+    return "none"
+
+
 class PersonZoneDetector:
-    """Background CPU worker that runs YOLO26s person detection on camera snapshots."""
+    """Background CPU worker that runs YOLO26 ONNX models when enabled."""
 
     def __init__(
         self,
-        model_path: Path,
+        model_paths: dict[str, Path],
         nvr_base_url: str,
         nvr_user: str,
         nvr_pass: str,
@@ -47,7 +63,7 @@ class PersonZoneDetector:
         imgsz: int = 640,
         interval_sec: float = 0.5,
     ) -> None:
-        self.model_path = model_path
+        self.model_paths = model_paths
         self.nvr_base_url = nvr_base_url
         self.nvr_user = nvr_user
         self.nvr_pass = nvr_pass
@@ -56,9 +72,10 @@ class PersonZoneDetector:
         self.imgsz = imgsz
         self.interval_sec = interval_sec
 
-        self._model: YOLO | None = None
+        self._models: dict[str, YOLO] = {}
         self._lock = threading.Lock()
         self._results: dict[str, dict[str, Any]] = {}
+        self._stats: dict[str, dict[str, Any]] = {}
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
 
@@ -66,7 +83,7 @@ class PersonZoneDetector:
         if self._thread and self._thread.is_alive():
             return
         self._stop_event.clear()
-        self._thread = threading.Thread(target=self._run_loop, name="yolo26-zone-worker", daemon=True)
+        self._thread = threading.Thread(target=self._run_loop, name="yolo26-worker", daemon=True)
         self._thread.start()
 
     def stop(self) -> None:
@@ -78,12 +95,20 @@ class PersonZoneDetector:
         with self._lock:
             return dict(self._results)
 
-    def _ensure_model(self) -> YOLO:
-        if self._model is None:
-            self._model = YOLO(str(self.model_path), task="detect")
-        return self._model
+    def _ensure_model(self, task_key: str) -> YOLO:
+        if task_key not in self._models:
+            path = self.model_paths[task_key]
+            if not path.is_file():
+                raise FileNotFoundError(f"Không tìm thấy model: {path}")
+            self._models[task_key] = YOLO(str(path), task="detect")
+        return self._models[task_key]
 
-    def _detect_camera(self, client: httpx.Client, model: YOLO, cam: dict[str, Any]) -> dict[str, Any]:
+    def _detect_camera(
+        self,
+        client: httpx.Client,
+        cam: dict[str, Any],
+        task_key: str,
+    ) -> dict[str, Any]:
         cam_id = cam["id"]
         zone = cam.get("zone") or []
         has_zone = len(zone) >= 3
@@ -93,9 +118,12 @@ class PersonZoneDetector:
         if resp.status_code != 200:
             return {
                 "cam_id": cam_id,
+                "ai_task": task_key,
                 "has_zone": has_zone,
+                "alert": False,
                 "person_in_zone": False,
                 "in_zone_count": 0,
+                "violation_count": 0,
                 "total_persons": 0,
                 "persons": [],
                 "error": f"HTTP {resp.status_code}",
@@ -107,35 +135,45 @@ class PersonZoneDetector:
         if frame is None:
             return {
                 "cam_id": cam_id,
+                "ai_task": task_key,
                 "has_zone": has_zone,
+                "alert": False,
                 "person_in_zone": False,
                 "in_zone_count": 0,
+                "violation_count": 0,
                 "total_persons": 0,
                 "persons": [],
                 "error": "Decode failed",
                 "updated_at": time.time(),
             }
 
+        model = self._ensure_model(task_key)
         h, w = frame.shape[:2]
         t0 = time.perf_counter()
-        preds = model.predict(
-            frame,
-            classes=[0],
-            conf=self.conf,
-            imgsz=self.imgsz,
-            device="cpu",
-            verbose=False,
-        )
+        predict_kwargs: dict[str, Any] = {
+            "conf": self.conf,
+            "imgsz": self.imgsz,
+            "device": "cpu",
+            "verbose": False,
+        }
+        if task_key == "cam2_person":
+            predict_kwargs["classes"] = [0]
+
+        preds = model.predict(frame, **predict_kwargs)
         inference_ms = round((time.perf_counter() - t0) * 1000)
 
-        persons: list[dict[str, Any]] = []
+        detections: list[dict[str, Any]] = []
         in_zone_count = 0
+        violation_count = 0
 
         if preds and preds[0].boxes is not None:
             boxes = preds[0].boxes
             xyxy_list = boxes.xyxy.cpu().tolist()
             conf_list = boxes.conf.cpu().tolist()
-            for (x1, y1, x2, y2), score in zip(xyxy_list, conf_list):
+            cls_list = boxes.cls.cpu().tolist()
+            names = model.names
+
+            for (x1, y1, x2, y2), score, cls_id in zip(xyxy_list, conf_list, cls_list):
                 nx1 = max(0.0, min(1.0, x1 / w))
                 ny1 = max(0.0, min(1.0, y1 / h))
                 nx2 = max(0.0, min(1.0, x2 / w))
@@ -143,10 +181,24 @@ class PersonZoneDetector:
                 # Diagonal midpoint of the bounding box
                 cx = (nx1 + nx2) / 2.0
                 cy = (ny1 + ny2) / 2.0
-                in_zone = point_in_polygon(cx, cy, zone) if has_zone else False
-                if in_zone:
-                    in_zone_count += 1
-                persons.append(
+                in_zone = point_in_polygon(cx, cy, zone) if has_zone else True
+                cls_name = str(names.get(int(cls_id), int(cls_id)))
+
+                if task_key == "cam2_person":
+                    # Green when inside zone, orange/muted when outside
+                    is_alert = False
+                    if in_zone:
+                        in_zone_count += 1
+                    label = "Trong vùng" if in_zone else "Ngoài vùng"
+                else:
+                    # Cam1 PPE: check violation classes (and respect zone if drawn)
+                    is_violation = cls_name in PPE_VIOLATION_CLASSES
+                    is_alert = is_violation and in_zone
+                    if is_alert:
+                        violation_count += 1
+                    label = cls_name
+
+                detections.append(
                     {
                         "x1": round(nx1, 4),
                         "y1": round(ny1, 4),
@@ -156,44 +208,98 @@ class PersonZoneDetector:
                         "cy": round(cy, 4),
                         "conf": round(float(score), 3),
                         "in_zone": in_zone,
+                        "is_alert": is_alert,
+                        "label": label,
                     }
                 )
 
+        # For Cam2 (machine zone), empty zone (no worker) is the alert state
+        alert = (in_zone_count == 0) if task_key == "cam2_person" else (violation_count > 0)
+        now = time.time()
+        stats = self._update_stats(cam_id, alert, now)
         return {
             "cam_id": cam_id,
+            "ai_task": task_key,
             "has_zone": has_zone,
+            "alert": alert,
             "person_in_zone": in_zone_count > 0,
             "in_zone_count": in_zone_count,
-            "total_persons": len(persons),
-            "persons": persons,
+            "violation_count": violation_count,
+            "total_persons": len(detections),
+            "persons": detections,
             "inference_ms": inference_ms,
-            "updated_at": time.time(),
+            "updated_at": now,
+            **stats,
         }
 
+    def _update_stats(self, cam_id: str, alert: bool, now: float) -> dict[str, Any]:
+        with self._lock:
+            st = self._stats.get(cam_id)
+            if st is None:
+                st = {
+                    "last_alert": alert,
+                    "state_since": now,
+                    "last_ts": now,
+                    "total_alert_sec": 0.0,
+                    "alert_count": 1 if alert else 0,
+                    "timeline": [],
+                }
+                self._stats[cam_id] = st
+            else:
+                dt = max(0.0, now - st["last_ts"])
+                if st["last_alert"]:
+                    st["total_alert_sec"] += dt
+                if alert and not st["last_alert"]:
+                    st["alert_count"] += 1
+                if alert != st["last_alert"]:
+                    st["last_alert"] = alert
+                    st["state_since"] = now
+                st["last_ts"] = now
+
+            st["timeline"].append(1 if alert else 0)
+            if len(st["timeline"]) > 60:
+                st["timeline"] = st["timeline"][-60:]
+
+            return {
+                "current_duration_sec": round(now - st["state_since"]),
+                "total_alert_sec": round(st["total_alert_sec"]),
+                "alert_count": st["alert_count"],
+                "timeline": list(st["timeline"]),
+            }
+
     def _run_loop(self) -> None:
-        model = self._ensure_model()
         auth = httpx.DigestAuth(self.nvr_user, self.nvr_pass)
         with httpx.Client(auth=auth, timeout=6.0) as client:
             while not self._stop_event.is_set():
-                cameras = [
-                    c for c in self.load_cameras_fn()
-                    if c.get("enabled", True) and len(c.get("zone") or []) >= 3
-                ]
-                if not cameras:
-                    self._stop_event.wait(1.0)
+                targets: list[tuple[dict[str, Any], str]] = []
+                for cam in self.load_cameras_fn():
+                    if not cam.get("enabled", True):
+                        continue
+                    task_key = resolve_camera_task(cam)
+                    if task_key == "none":
+                        continue
+                    if task_key == "cam2_person" and len(cam.get("zone") or []) < 3:
+                        continue
+                    targets.append((cam, task_key))
+
+                if not targets:
+                    self._stop_event.wait(0.8)
                     continue
 
-                for cam in cameras:
+                for cam, task_key in targets:
                     if self._stop_event.is_set():
                         break
                     try:
-                        result = self._detect_camera(client, model, cam)
+                        result = self._detect_camera(client, cam, task_key)
                     except Exception as exc:
                         result = {
                             "cam_id": cam["id"],
+                            "ai_task": task_key,
                             "has_zone": len(cam.get("zone") or []) >= 3,
+                            "alert": False,
                             "person_in_zone": False,
                             "in_zone_count": 0,
+                            "violation_count": 0,
                             "total_persons": 0,
                             "persons": [],
                             "error": str(exc),

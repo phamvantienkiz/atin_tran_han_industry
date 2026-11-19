@@ -306,8 +306,31 @@ body {
 
 .camera-grid[data-layout="1"] {
   grid-template-columns: minmax(0, 1fr);
-  max-width: 960px;
+  max-width: 1180px;
   margin: 0 auto;
+}
+
+.camera-grid[data-layout="1"] .ai-hud {
+  width: min(330px, calc(100% - 140px));
+  padding: 10px 12px;
+  gap: 4px;
+}
+
+.camera-grid[data-layout="1"] .ai-hud-kicker {
+  font-size: 10.5px;
+}
+
+.camera-grid[data-layout="1"] .ai-hud-status {
+  font-size: 15px;
+}
+
+.camera-grid[data-layout="1"] .ai-hud-sub {
+  font-size: 12px;
+}
+
+.camera-grid[data-layout="1"] .ai-hud-stats,
+.camera-grid[data-layout="1"] .ai-hud-timeline-head {
+  font-size: 11px;
 }
 
 .camera-grid[data-layout="6"] {
@@ -483,46 +506,111 @@ body {
   background: var(--data-alert);
 }
 
-.zone-status-badge {
+.stream-badge.badge-right {
+  left: auto;
+  right: var(--space-3);
+}
+
+.ai-hud {
   position: absolute;
   top: var(--space-3);
-  right: var(--space-3);
-  display: inline-flex;
+  left: var(--space-3);
+  width: min(260px, calc(100% - 110px));
+  background: rgba(15, 23, 42, 0.74);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: #f8fafc;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
+}
+
+.ai-hud-kicker {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: rgba(226, 232, 240, 0.78);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ai-hud-status {
+  display: flex;
   align-items: center;
   gap: 6px;
-  background: rgba(255, 255, 255, 0.92);
-  backdrop-filter: blur(8px);
-  box-shadow: var(--shadow-control);
-  padding: 5px 10px;
-  border-radius: var(--radius-full);
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-primary);
-  pointer-events: none;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
 }
 
-.zone-status-badge .dot {
-  width: 7px;
-  height: 7px;
+.ai-hud-status .dot {
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  background: var(--text-tertiary);
+  flex-shrink: 0;
+  background: #94a3b8;
 }
 
-.zone-status-badge[data-state="alert"] {
-  background: rgba(254, 242, 242, 0.96);
-  color: #b91c1c;
+.ai-hud[data-state="alert"] .ai-hud-status {
+  color: #f87171;
 }
 
-.zone-status-badge[data-state="alert"] .dot {
+.ai-hud[data-state="alert"] .ai-hud-status .dot {
   background: #ef4444;
 }
 
-.zone-status-badge[data-state="clear"] {
-  color: #047857;
+.ai-hud[data-state="clear"] .ai-hud-status {
+  color: #4ade80;
 }
 
-.zone-status-badge[data-state="clear"] .dot {
-  background: #10b981;
+.ai-hud[data-state="clear"] .ai-hud-status .dot {
+  background: #22c55e;
+}
+
+.ai-hud-sub {
+  font-size: 11px;
+  color: rgba(241, 245, 249, 0.9);
+}
+
+.ai-hud-stats {
+  font-size: 10px;
+  color: rgba(203, 213, 225, 0.85);
+}
+
+.ai-hud-timeline-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 9.5px;
+  color: rgba(203, 213, 225, 0.78);
+  margin-top: 2px;
+}
+
+.ai-hud-timeline {
+  display: flex;
+  align-items: stretch;
+  height: 7px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.14);
+  gap: 1px;
+}
+
+.ai-hud-seg {
+  flex: 1 1 0;
+  min-width: 1px;
+}
+
+.ai-hud-seg.is-clear {
+  background: #22c55e;
+}
+
+.ai-hud-seg.is-alert {
+  background: #ef4444;
 }
 
 .viewport-fallback {
@@ -716,6 +804,7 @@ body {
 
 /* Focus Viewport */
 .focus-viewport {
+  position: relative;
   width: 100%;
   aspect-ratio: 16 / 9;
   background: var(--bg-subtle);
@@ -726,8 +815,50 @@ body {
 .focus-viewport img {
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: fill;
   display: block;
+}
+
+.focus-viewport canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.ai-hud-lg {
+  width: min(340px, calc(100% - 140px));
+  padding: 10px 12px;
+  gap: 4px;
+}
+
+.ai-hud-lg .ai-hud-kicker {
+  font-size: 10.5px;
+}
+
+.ai-hud-lg .ai-hud-status {
+  font-size: 15px;
+}
+
+.ai-hud-lg .ai-hud-sub {
+  font-size: 12px;
+}
+
+.ai-hud-lg .ai-hud-stats,
+.ai-hud-lg .ai-hud-timeline-head {
+  font-size: 11px;
+}
+
+.cam-overlay-label {
+  position: absolute;
+  left: var(--space-4);
+  bottom: var(--space-3);
+  font-size: 16px;
+  font-weight: 600;
+  color: #ffffff;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.85), 0 0 2px rgba(0, 0, 0, 0.9);
+  pointer-events: none;
 }
 
 /* Brief list */
