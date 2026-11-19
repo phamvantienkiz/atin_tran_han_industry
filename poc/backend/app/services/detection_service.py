@@ -9,11 +9,15 @@ from app.services.camera_service import CameraService
 
 
 class DetectionService:
-    """Exposes live AI detections and focus control without HTTP coupling."""
+    """Exposes live AI detections, focus control, and stats reset without HTTP coupling."""
 
     def __init__(self, detector: PersonZoneDetector, camera_service: CameraService) -> None:
         self._detector = detector
         self._camera_service = camera_service
+
+    @property
+    def active_provider(self) -> str:
+        return self._detector.active_provider
 
     def start(self) -> None:
         self._detector.start()
@@ -31,3 +35,7 @@ class DetectionService:
             self._camera_service.get_camera(cam_id)
         self._detector.set_focus(cam_id or None)
         return {"focus_cam_id": cam_id or None}
+
+    def reset_stats(self, cam_id: str) -> dict[str, Any]:
+        self._camera_service.get_camera(cam_id)
+        return self._detector.reset_stats(cam_id)

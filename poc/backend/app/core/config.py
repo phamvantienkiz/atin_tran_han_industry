@@ -11,27 +11,43 @@ def _resolve_path(raw: str) -> Path:
     return path if path.is_absolute() else (BACKEND_ROOT / path).resolve()
 
 
+def _cuda_provider_available() -> bool:
+    try:
+        import onnxruntime as ort
+
+        return "CUDAExecutionProvider" in ort.get_available_providers()
+    except Exception:  # noqa: BLE001
+        return False
+
+
 class Settings(BaseSettings):
     """Centralized application settings loaded from `.env`."""
 
-    # --- App ---
+    # --- App & Server ---
     APP_NAME: str = "ATIN Tran Han AI Backend"
-    ENVIRONMENT: str = "local"
+    ENVIRONMENT: str = "poc"
     DEBUG: bool = True
+    PORT: int = 28080
     API_V1_PREFIX: str = "/api/v1"
     PROJECT_DISPLAY_NAME: str = "Nhà máy Thủy sản Trần Hân"
     SERVE_FRONTEND: bool = True
 
     # --- Paths ---
-    FRONTEND_DIR: str = "../frontend"
+    FRONTEND_DIR: str = "../frontend/out"
+    FRONTEND_LEGACY_DIR: str = "../frontend"
     CAMERAS_FILE: str = "../data/cameras.json"
-    MODEL_PATH: str = "../models/yolo26s.onnx"
+    MODEL_PATH: str = "../models/yolo26s_best.onnx"
     STORAGES_DIR: str = "../storages"
 
     # --- Security & CORS ---
     SECRET_KEY: str = "change-me-in-production"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
-    BACKEND_CORS_ORIGINS: list[str] = ["http://localhost:8000", "http://127.0.0.1:8000"]
+    BACKEND_CORS_ORIGINS: list[str] = [
+        "http://localhost:28080",
+        "http://127.0.0.1:28080",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ]
     RATE_LIMIT_PER_MINUTE: int = 600
 
     # --- NVR (PoC Direct Mode) ---
@@ -39,16 +55,25 @@ class Settings(BaseSettings):
     NVR_PORT: int = 80
     NVR_USER: str = ""
     NVR_PASS: str = ""
+    NVR_STREAM_FPS_LIMIT: float = 12.0
 
-    # --- AI Detector ---
+    # --- AI Core ---
     AI_ENABLED: bool = True
-    AI_CONF_THRESHOLD: float = 0.45
+    AI_RUNTIME: str = "auto"  # auto | onnx_cuda | cpu
+    AI_VRAM_LIMIT_MB: int = 1024
+    AI_CONF_THRESHOLD: float = 0.40
     AI_IMGSZ: int = 640
+    AI_TARGET_FPS: float = 12.0
+    AI_ANCHOR_MODE: str = "bottom_center"  # bottom_center | center
+    AI_PRESENCE_GRACE_SECONDS: float = 2.0
+    AI_PRESENCE_WARNING_SECONDS: float = 10.0
+    AI_TIMELINE_WINDOW_SECONDS: int = 1800
     AI_INTERVAL_SEC: float = 0.5
     AI_FOCUS_INTERVAL_SEC: float = 0.15
     AI_FOCUS_TTL_SEC: float = 15.0
     AI_CONFIRM_SECONDS: float = 2.0
     AI_EVENT_COOLDOWN_SECONDS: float = 60.0
+    WS_PUSH_MAX_HZ: float = 15.0
 
     # --- Database (Production / Alembic) ---
     DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/tranhan_ai"
@@ -77,7 +102,16 @@ class Settings(BaseSettings):
 
     @cached_property
     def frontend_path(self) -> Path:
-        return _resolve_path(self.FRONTEND_DIR)
+        primary = _resolve_path(self.FRONTEND_DIR)
+        if primary.is_dir() and (primary / "index.html").is_file():
+            return primary
+        legacy = _resolve_path(self.FRONTEND_LEGACY_DIR)
+        if legacy.is_dir() and (legacy / "index.html").is_file():
+            return legacy
+        legacy_backup = legacy / "legacy_vanilla"
+        if legacy_backup.is_dir() and (legacy_backup / "index.html").is_file():
+            return legacy_backup
+        return primary
 
     @cached_property
     def cameras_file_path(self) -> Path:
@@ -85,7 +119,23 @@ class Settings(BaseSettings):
 
     @cached_property
     def model_file_path(self) -> Path:
-        return _resolve_path(self.MODEL_PATH)
+        configured = _resolve_path(self.MODEL_PATH)
+        models_dir = configured.parent
+        fp16_path = models_dir / "yolo26s_fp16.onnx"
+        best_path = models_dir / "yolo26s_best.onnx"
+        default_path = models_dir / "yolo26s.onnx"
+
+        want_cuda = self.AI_RUNTIME.lower() in ("auto", "onnx_cuda") and _cuda_provider_available()
+        if want_cuda and fp16_path.is_file():
+            return fp16_path
+
+        if configured.is_file():
+            return configured
+
+        for candidate in (best_path, default_path, fp16_path):
+            if candidate.is_file():
+                return candidate
+        return configured
 
     @cached_property
     def storages_path(self) -> Path:

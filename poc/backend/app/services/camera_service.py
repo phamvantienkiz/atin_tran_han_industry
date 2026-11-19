@@ -7,9 +7,12 @@ from typing import Any
 
 import httpx
 
+from app.ai.nvr_stream import NvrStreamManager
 from app.exceptions.custom import NotFoundError, UpstreamError
 from app.repositories.camera_repository import CameraRepository
 from app.schemas.camera import CameraCreate, CameraUpdate, ZonePoint
+
+_RAM_SNAPSHOT_MAX_AGE_SEC = 2.0
 
 
 class CameraService:
@@ -22,19 +25,31 @@ class CameraService:
         nvr_user: str,
         nvr_pass: str,
         nvr_configured: bool,
+        nvr_stream_manager: NvrStreamManager | None = None,
     ) -> None:
         self._repo = repo
         self._nvr_base_url = nvr_base_url
         self._nvr_user = nvr_user
         self._nvr_pass = nvr_pass
         self._nvr_configured = nvr_configured
+        self._nvr_stream_manager = nvr_stream_manager
+
+    @staticmethod
+    def _normalize_camera(cam: dict[str, Any]) -> dict[str, Any]:
+        """Ensure PoC v001 optional fields have safe defaults for legacy cameras.json entries."""
+        normalized = dict(cam)
+        normalized.setdefault("zone_name", "")
+        normalized.setdefault("feature_type", "zone_presence")
+        normalized.setdefault("grace_seconds", 2.0)
+        normalized.setdefault("warning_seconds", 10.0)
+        return normalized
 
     def list_cameras(
         self,
         enabled: bool | None = None,
         search: str | None = None,
     ) -> list[dict[str, Any]]:
-        cameras = self._repo.list_all()
+        cameras = [self._normalize_camera(c) for c in self._repo.list_all()]
         if enabled is not None:
             cameras = [c for c in cameras if bool(c.get("enabled", True)) is enabled]
         if search and search.strip():
@@ -43,6 +58,7 @@ class CameraService:
                 c
                 for c in cameras
                 if needle in str(c.get("name", "")).lower()
+                or needle in str(c.get("zone_name", "")).lower()
                 or needle in str(c.get("note", "")).lower()
                 or needle in str(c.get("id", "")).lower()
             ]
@@ -52,7 +68,7 @@ class CameraService:
         cam = self._repo.get_by_id(cam_id)
         if cam is None:
             raise NotFoundError(f"Camera '{cam_id}' không tồn tại")
-        return cam
+        return self._normalize_camera(cam)
 
     def create_camera(self, payload: CameraCreate) -> dict[str, Any]:
         cameras = self._repo.list_all()
@@ -64,9 +80,13 @@ class CameraService:
             "id": cam_id,
             "channel": payload.channel,
             "name": payload.name.strip(),
+            "zone_name": payload.zone_name.strip(),
             "note": payload.note.strip(),
             "subtype": payload.subtype,
             "mode": payload.mode,
+            "feature_type": payload.feature_type,
+            "grace_seconds": payload.grace_seconds,
+            "warning_seconds": payload.warning_seconds,
             "enabled": payload.enabled,
             "zone": [],
         }
@@ -81,11 +101,13 @@ class CameraService:
                 updates = payload.model_dump(exclude_none=True)
                 if "name" in updates:
                     updates["name"] = updates["name"].strip()
+                if "zone_name" in updates:
+                    updates["zone_name"] = updates["zone_name"].strip()
                 if "note" in updates:
                     updates["note"] = updates["note"].strip()
                 cam.update(updates)
                 self._repo.save_all(cameras)
-                return cam
+                return self._normalize_camera(cam)
         raise NotFoundError(f"Camera '{cam_id}' không tồn tại")
 
     def delete_camera(self, cam_id: str) -> dict[str, str]:
@@ -102,7 +124,7 @@ class CameraService:
             if cam.get("id") == cam_id:
                 cam["zone"] = [p.model_dump() for p in points]
                 self._repo.save_all(cameras)
-                return cam
+                return self._normalize_camera(cam)
         raise NotFoundError(f"Camera '{cam_id}' không tồn tại")
 
     def _require_nvr(self) -> httpx.DigestAuth:
@@ -113,8 +135,13 @@ class CameraService:
             )
         return httpx.DigestAuth(self._nvr_user, self._nvr_pass)
 
-    async def fetch_snapshot(self, cam_id: str) -> tuple[bytes, str, int]:
+    async def fetch_snapshot(self, cam_id: str, *, direct: bool = False) -> tuple[bytes, str, int]:
         cam = self.get_camera(cam_id)
+        if not direct and self._nvr_stream_manager is not None:
+            pkt = self._nvr_stream_manager.latest(cam_id)
+            if pkt is not None and (time.monotonic() - pkt.ts_mono) < _RAM_SNAPSHOT_MAX_AGE_SEC:
+                return pkt.jpeg_bytes, "image/jpeg", 0
+
         auth = self._require_nvr()
         url = f"{self._nvr_base_url}/cgi-bin/snapshot.cgi?channel={cam['channel']}"
         t0 = time.perf_counter()
@@ -133,6 +160,18 @@ class CameraService:
 
     async def probe_camera(self, cam_id: str) -> dict[str, Any]:
         cam = self.get_camera(cam_id)
+        if self._nvr_stream_manager is not None:
+            pkt = self._nvr_stream_manager.latest(cam_id)
+            if pkt is not None and (time.monotonic() - pkt.ts_mono) < 3.0:
+                return {
+                    "id": cam_id,
+                    "online": True,
+                    "status_code": 200,
+                    "latency_ms": max(1, round((time.monotonic() - pkt.ts_mono) * 1000)),
+                    "bytes": len(pkt.jpeg_bytes),
+                    "source": "ram_stream",
+                }
+
         auth = self._require_nvr()
         url = f"{self._nvr_base_url}/cgi-bin/snapshot.cgi?channel={cam['channel']}"
         t0 = time.perf_counter()

@@ -219,9 +219,14 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
+# models
+*.pt
+*.onnx
+
 # user customs
 customers/
 docs/ai/
+docs/note/
 poc/docs/linkcam.md
 .vscode/
 runs/

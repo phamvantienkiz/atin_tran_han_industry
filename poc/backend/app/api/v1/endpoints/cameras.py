@@ -1,10 +1,13 @@
+import asyncio
+from collections.abc import AsyncIterator
 from typing import Annotated, Any
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import Response, StreamingResponse
 
-from app.api.deps import get_camera_service, get_media_service
+from app.ai.nvr_stream import NvrStreamManager
+from app.api.deps import get_camera_service, get_media_service, get_nvr_stream_manager
 from app.schemas.camera import CameraCreate, CameraUpdate, ZonePayload
 from app.schemas.media import RecordStartPayload
 from app.services.camera_service import CameraService
@@ -60,8 +63,9 @@ def save_zone(
 async def get_snapshot(
     cam_id: str,
     service: Annotated[CameraService, Depends(get_camera_service)],
+    direct: bool = Query(default=False),
 ) -> Response:
-    content, media_type, latency_ms = await service.fetch_snapshot(cam_id)
+    content, media_type, latency_ms = await service.fetch_snapshot(cam_id, direct=direct)
     return Response(
         content=content,
         media_type=media_type,
@@ -80,13 +84,52 @@ async def probe_camera(
     return await service.probe_camera(cam_id)
 
 
+def _format_mjpeg_part(jpeg_bytes: bytes) -> bytes:
+    header = (
+        b"--frame\r\n"
+        b"Content-Type: image/jpeg\r\n"
+        b"Content-Length: " + str(len(jpeg_bytes)).encode("ascii") + b"\r\n\r\n"
+    )
+    return header + jpeg_bytes + b"\r\n"
+
+
 @router.get("/{cam_id}/mjpeg")
 async def stream_mjpeg(
     cam_id: str,
+    request: Request,
     service: Annotated[CameraService, Depends(get_camera_service)],
+    stream_manager: Annotated[NvrStreamManager, Depends(get_nvr_stream_manager)],
     subtype: int | None = Query(default=None, ge=0, le=2),
 ) -> StreamingResponse:
-    url, auth = service.build_mjpeg_request(cam_id, subtype)
+    cam = service.get_camera(cam_id)
+    requested_sub = int(cam.get("subtype", 1)) if subtype is None else subtype
+
+    # Fast path: serve JPEG directly from shared in-RAM NvrStreamManager (1 upstream conn/cam)
+    cached_pkt = stream_manager.latest(cam_id)
+    if cached_pkt is not None and cached_pkt.subtype == requested_sub:
+
+        async def ram_iterator() -> AsyncIterator[bytes]:
+            last_seq = -1
+            while not await request.is_disconnected():
+                pkt = stream_manager.latest(cam_id)
+                if pkt is None or pkt.subtype != requested_sub:
+                    break
+                if pkt.seq != last_seq:
+                    last_seq = pkt.seq
+                    yield _format_mjpeg_part(pkt.jpeg_bytes)
+                await asyncio.sleep(0.04)
+
+        return StreamingResponse(
+            ram_iterator(),
+            media_type="multipart/x-mixed-replace; boundary=frame",
+            headers={
+                "Cache-Control": "no-store, no-cache, must-revalidate",
+                "X-Stream-Source": "ram-shared",
+            },
+        )
+
+    # Fallback path: direct proxy to NVR (e.g. cold start or Focus Modal switching subtype)
+    url, auth = service.build_mjpeg_request(cam_id, requested_sub)
     client = httpx.AsyncClient(auth=auth, timeout=httpx.Timeout(10.0, read=30.0))
     req = client.build_request("GET", url)
     try:
@@ -105,9 +148,11 @@ async def stream_mjpeg(
         "multipart/x-mixed-replace; boundary=myboundary",
     )
 
-    async def body_iterator():
+    async def body_iterator() -> AsyncIterator[bytes]:
         try:
             async for chunk in upstream.aiter_bytes(chunk_size=8192):
+                if await request.is_disconnected():
+                    break
                 yield chunk
         finally:
             await upstream.aclose()
@@ -116,7 +161,10 @@ async def stream_mjpeg(
     return StreamingResponse(
         body_iterator(),
         media_type=content_type,
-        headers={"Cache-Control": "no-store"},
+        headers={
+            "Cache-Control": "no-store",
+            "X-Stream-Source": "nvr-direct",
+        },
     )
 
 

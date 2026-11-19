@@ -1,7 +1,7 @@
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api.v1.router import api_router
@@ -18,14 +18,22 @@ logger = get_logger("app.main")
 async def lifespan(_app: FastAPI):
     setup_logging()
     container = get_container()
-    if settings.AI_ENABLED and settings.nvr_configured:
-        container.detection_service.start()
+    container.ws_hub.bind_loop(asyncio.get_running_loop())
+
+    if settings.nvr_configured:
+        container.nvr_stream_manager.reset_for_start()
+        container.nvr_stream_manager.sync_cameras(container.camera_repo.list_all())
+        if settings.AI_ENABLED:
+            container.detection_service.start()
     elif settings.AI_ENABLED:
         logger.warning("NVR credentials not configured; background AI NVR worker skipped.")
+
     try:
         yield
     finally:
+        await container.ws_hub.close_all()
         container.detection_service.stop()
+        container.nvr_stream_manager.stop_all()
 
 
 def create_app() -> FastAPI:
@@ -42,17 +50,11 @@ def create_app() -> FastAPI:
 
     if settings.SERVE_FRONTEND and settings.frontend_path.is_dir():
         frontend_dir = settings.frontend_path
-
-        @app.get("/", include_in_schema=False)
-        def index() -> FileResponse:
-            return FileResponse(frontend_dir / "index.html")
-
-        @app.get("/styles.css", include_in_schema=False)
-        def styles() -> FileResponse:
-            return FileResponse(frontend_dir / "styles.css")
-
-        if (frontend_dir / "js").is_dir():
-            app.mount("/js", StaticFiles(directory=frontend_dir / "js"), name="js")
+        app.mount(
+            "/",
+            StaticFiles(directory=str(frontend_dir), html=True),
+            name="frontend",
+        )
 
     return app
 
