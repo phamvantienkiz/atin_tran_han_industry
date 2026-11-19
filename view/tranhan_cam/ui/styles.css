@@ -311,26 +311,26 @@ body {
 }
 
 .camera-grid[data-layout="1"] .ai-hud {
-  width: min(330px, calc(100% - 140px));
-  padding: 10px 12px;
-  gap: 4px;
+  width: min(175px, calc(100% - 110px));
+  padding: 5px 7px;
+  gap: 2px;
 }
 
 .camera-grid[data-layout="1"] .ai-hud-kicker {
-  font-size: 10.5px;
+  font-size: 8px;
 }
 
 .camera-grid[data-layout="1"] .ai-hud-status {
-  font-size: 15px;
+  font-size: 11px;
 }
 
 .camera-grid[data-layout="1"] .ai-hud-sub {
-  font-size: 12px;
+  font-size: 9px;
 }
 
 .camera-grid[data-layout="1"] .ai-hud-stats,
 .camera-grid[data-layout="1"] .ai-hud-timeline-head {
-  font-size: 11px;
+  font-size: 8px;
 }
 
 .camera-grid[data-layout="6"] {
@@ -513,26 +513,26 @@ body {
 
 .ai-hud {
   position: absolute;
-  top: var(--space-3);
-  left: var(--space-3);
-  width: min(260px, calc(100% - 110px));
+  top: var(--space-2);
+  left: var(--space-2);
+  width: min(145px, calc(100% - 90px));
   background: rgba(15, 23, 42, 0.74);
   backdrop-filter: blur(8px);
   border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 8px;
-  padding: 8px 10px;
+  border-radius: 6px;
+  padding: 4px 6px;
   color: #f8fafc;
   pointer-events: none;
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
+  gap: 1.5px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
 }
 
 .ai-hud-kicker {
-  font-size: 9px;
+  font-size: 7px;
   font-weight: 600;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.03em;
   color: rgba(226, 232, 240, 0.78);
   white-space: nowrap;
   overflow: hidden;
@@ -542,15 +542,16 @@ body {
 .ai-hud-status {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 13px;
+  gap: 4px;
+  font-size: 9.5px;
   font-weight: 700;
   letter-spacing: 0.01em;
+  line-height: 1.2;
 }
 
 .ai-hud-status .dot {
-  width: 8px;
-  height: 8px;
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
   flex-shrink: 0;
   background: #94a3b8;
@@ -573,28 +574,31 @@ body {
 }
 
 .ai-hud-sub {
-  font-size: 11px;
+  font-size: 8px;
+  line-height: 1.2;
   color: rgba(241, 245, 249, 0.9);
 }
 
 .ai-hud-stats {
-  font-size: 10px;
+  font-size: 7px;
+  line-height: 1.2;
   color: rgba(203, 213, 225, 0.85);
 }
 
 .ai-hud-timeline-head {
   display: flex;
   justify-content: space-between;
-  font-size: 9.5px;
+  font-size: 7px;
+  line-height: 1.2;
   color: rgba(203, 213, 225, 0.78);
-  margin-top: 2px;
+  margin-top: 1px;
 }
 
 .ai-hud-timeline {
   display: flex;
   align-items: stretch;
-  height: 7px;
-  border-radius: 3px;
+  height: 4px;
+  border-radius: 2px;
   overflow: hidden;
   background: rgba(255, 255, 255, 0.14);
   gap: 1px;
@@ -828,26 +832,26 @@ body {
 }
 
 .ai-hud-lg {
-  width: min(340px, calc(100% - 140px));
-  padding: 10px 12px;
-  gap: 4px;
+  width: min(175px, calc(100% - 110px));
+  padding: 5px 7px;
+  gap: 2px;
 }
 
 .ai-hud-lg .ai-hud-kicker {
-  font-size: 10.5px;
+  font-size: 8px;
 }
 
 .ai-hud-lg .ai-hud-status {
-  font-size: 15px;
+  font-size: 11px;
 }
 
 .ai-hud-lg .ai-hud-sub {
-  font-size: 12px;
+  font-size: 9px;
 }
 
 .ai-hud-lg .ai-hud-stats,
 .ai-hud-lg .ai-hud-timeline-head {
-  font-size: 11px;
+  font-size: 8px;
 }
 
 .cam-overlay-label {
