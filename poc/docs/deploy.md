@@ -1,8 +1,8 @@
 # Hướng Dẫn Triển Khai Chi Tiết PoC v001 Trên Server GPU `aiot` (`tts@aiot:~/projects/tien$`)
 
-> **Mục tiêu**: Đưa trọn bộ **ATIN Trần Hân AI PoC v001** (Backend FastAPI + AI GPU `onnxruntime-gpu` FP16 + ByteTrack + Next.js Static Export) lên server **`aiot` (`192.168.1.170`)**, chạy gọn trên **1 Port duy nhất (`28080`)** để:
-> 1. Kiểm thử trực tiếp từ laptop cá nhân qua **OpenVPN + Termius Port Forwarding (`28080 -> 127.0.0.1:28080`)**.
-> 2. Sau khi test ổn định, báo bộ phận IT công ty mở **Public Port `28080`** (hoặc gắn Domain HTTPS) cho khách hàng Nhà máy Thủy sản Trần Hân truy cập trực tiếp.
+> **Mục tiêu**: Đưa trọn bộ **ATIN Trần Hân AI PoC v001** (Backend FastAPI + AI GPU `onnxruntime-gpu` FP16 + ByteTrack + Next.js Static Export) lên server **`aiot` (`192.168.1.170`)**, chạy gọn trên **1 Port duy nhất (`28080` — ĐÃ ĐƯỢC CÔNG TY MỞ PUBLIC)**:
+> 1. Truy cập trực tiếp từ Internet (`http://<PUBLIC_IP>:28080` hoặc `https://<DOMAIN_CTY>`) **không cần bật OpenVPN hay Termius** — dùng được ngay cho cả Dev test lẫn khách hàng Nhà máy Thủy sản Trần Hân.
+> 2. Vẫn có thể xem song song qua mạng nội bộ (`http://192.168.1.170:28080`) hoặc Termius Port Forwarding (`http://localhost:28080`) khi cần debug nội bộ.
 
 ---
 
@@ -15,9 +15,10 @@
 | **Thư mục dự án** | `~/projects/tien/atin_tran_han_industry` |
 | **GitHub Repository** | `https://github.com/phamvantienkiz/atin_tran_han_industry.git` (nhánh `jin`) |
 | **GPU & Giới hạn VRAM** | NVIDIA RTX A400 (**4 GB VRAM dùng chung**) — PoC giới hạn **`AI_VRAM_LIMIT_MB=1024`** |
-| **Port dịch vụ duy nhất** | **`28080`** (gộp chung Next.js UI + REST API + WebSocket BBox + MJPEG Stream) |
+| **Port dịch vụ duy nhất** | **`28080` (ĐÃ MỞ PUBLIC)** — gộp chung Next.js UI + REST API + WebSocket BBox + MJPEG Stream |
 | **NVR Trần Hân (DDNS)** | `nmts2025.smartddns.tv:80` · User: `user` · Pass: `testcam@123` (Kênh `16, 17, 18, 21`) |
-| **Quy tắc vận hành** | Cô lập 100% trong `poc/backend/.venv` (chạy bằng `uv`) và `poc/frontend/node_modules`. **Không dùng `tmux`** khi dev/test; bấm **`Ctrl + C`** phải dừng sạch tiến trình & giải phóng VRAM ngay lập tức. |
+| **Node.js trên `aiot`** | Đã cài `node v20.20.2` & `npm 10.8.2` |
+| **Quy tắc vận hành** | Cô lập 100% trong `poc/backend/.venv` (chạy bằng `uv`) và `poc/frontend/node_modules`. Bấm **`Ctrl + C`** phải dừng sạch tiến trình, nhả cổng `28080` & giải phóng VRAM ngay lập tức. |
 
 ---
 
@@ -68,36 +69,30 @@ tmux ls 2>/dev/null || true
 
 ---
 
-## 4. Giai Đoạn 2 — Cài Đặt Node.js 20 LTS Trên `aiot` (Chỉ Làm 1 Lần Đầu)
+## 4. Giai Đoạn 2 — Cài Đặt Node.js 20 LTS Trên `aiot` *(Đã hoàn tất: `v20.20.2` / `npm 10.8.2`)*
 
-Next.js 15 yêu cầu **Node.js `>= 18.18`** (khuyến nghị **Node 20 LTS**). Kiểm tra trước:
+Next.js 15 yêu cầu **Node.js `>= 18.18`** (khuyến nghị **Node 20 LTS**). Kiểm tra nhanh:
 
 ```bash
-node -v 2>/dev/null || echo "Chưa có Node.js"
+node -v && npm -v
 ```
+*(Nếu đã hiện `v20.x.x` và `10.x.x`, **bỏ qua giai đoạn này** và chuyển thẳng sang **Giai đoạn 3**).*
 
-Nếu chưa có Node.js hoặc phiên bản `< 18.18`, chọn **Cách B** (ưu tiên trên server dùng chung vì **không cần `sudo`**, không động tới hệ thống của dev khác):
+Trường hợp cài lại trên server Ubuntu 22.04 mới (`NEEDRESTART_MODE=l` tránh hiện màn hình hồng `needrestart` và tránh restart dịch vụ của dev khác):
 
-### Cách B (Khuyến nghị — Cài cục bộ trong `~/projects/tien/.local`, không cần `sudo`):
 ```bash
-mkdir -p ~/projects/tien/.local
-cd ~/projects/tien/.local
-curl -fsSL https://nodejs.org/dist/v20.18.1/node-v20.18.1-linux-x64.tar.xz -o node20.tar.xz
-tar -xJf node20.tar.xz
-rm -f node20.tar.xz
+export NEEDRESTART_MODE=l
+export DEBIAN_FRONTEND=noninteractive
 
-# Thêm vào PATH phiên hiện tại và lưu vào ~/.bashrc
-export PATH="$HOME/projects/tien/.local/node-v20.18.1-linux-x64/bin:$PATH"
-grep -q "node-v20.18.1-linux-x64/bin" ~/.bashrc || echo 'export PATH="$HOME/projects/tien/.local/node-v20.18.1-linux-x64/bin:$PATH"' >> ~/.bashrc
-
-node -v   # Kỳ vọng: v20.18.1
-npm -v    # Kỳ vọng: 10.x.x
-```
-
-### Cách A (Thay thế nếu muốn cài system-wide bằng `sudo`):
-```bash
+# 1. Thêm nguồn NodeSource 20.x chính thức
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt-get install -y nodejs
+
+# 2. Gỡ bản Node 12 mặc định (nếu có) và cài Node 20 LTS kèm npm
+sudo -E apt-get purge -y nodejs libnode72 nodejs-doc 2>/dev/null || true
+sudo -E apt-get install -y nodejs
+
+# 3. Xác nhận phiên bản
+hash -r
 node -v && npm -v
 ```
 
@@ -196,6 +191,7 @@ PROJECT_DISPLAY_NAME="Nhà máy Thủy sản Trần Hân"
 SERVE_FRONTEND=true
 FRONTEND_DIR=../frontend/out
 FRONTEND_LEGACY_DIR=../frontend
+RATE_LIMIT_PER_MINUTE=1800
 
 # --- NVR Nhà máy Thủy sản Trần Hân (DDNS Direct Mode) ---
 NVR_HOST=nmts2025.smartddns.tv
@@ -255,51 +251,42 @@ nvidia-smi --query-compute-apps=pid,process_name,used_memory --format=csv
 
 ---
 
-## 9. Giai Đoạn 7 — Test Từ Laptop Qua Termius Port Forwarding (`28080`)
+## 9. Giai Đoạn 7 — Truy Cập Public Port `28080` & Kiểm Thử Toàn Diện
 
-### Bước 7.1: Cấu hình Local Port Forwarding trên Termius
-Trong mục **Port Forwarding** của Termius (có thể dùng lại rule `28080` của dự án trước):
+Vì công ty **đã mở Public Port `28080`** trỏ vào `192.168.1.170:28080`, ngay khi `./scripts/run_server.sh --build` khởi chạy thành công trên `aiot`, bạn có thể mở trực tiếp từ **bất kỳ thiết bị nào có Internet** (không cần bật OpenVPN hay Termius):
 
-| Trường | Giá trị |
-| :--- | :--- |
-| **Type** | `Local` |
-| **Host** | `aiot` (`tts@192.168.1.170`) |
-| **Local Port** | `28080` |
-| **Bind Address** | `127.0.0.1` |
-| **Destination Host** | `127.0.0.1` |
-| **Destination Port** | `28080` |
+### 3 Đường truy cập (dùng chung 100%, không cần sửa code)
+| Kênh truy cập | URL | Khi nào dùng |
+| :--- | :--- | :--- |
+| **1. Public Internet (Chính)** | `http://<PUBLIC_IP_CTY>:28080` *(hoặc `https://<DOMAIN_CTY>` nếu có gắn domain)* | Gửi trực tiếp cho PM, khách hàng Nhà máy Thủy sản Trần Hân, hoặc test bằng điện thoại 4G/5G (tắt VPN). |
+| **2. Nội bộ VPN công ty** | `http://192.168.1.170:28080` | Truy cập thẳng khi đang bật OpenVPN Connect. |
+| **3. Termius Port Forwarding** | `http://localhost:28080` *(Rule: `Local 28080 -> 127.0.0.1:28080`)* | Tùy chọn dự phòng cho dev khi cần debug nội bộ. |
 
-### Bước 7.2: Mở trình duyệt trên Laptop & Checklist kiểm thử trước khi báo IT
-Truy cập các URL sau trên trình duyệt laptop:
-- **Giao diện chính (Next.js Live View)**: `http://localhost:28080`
-- **Swagger API Docs**: `http://localhost:28080/docs`
-- **Healthcheck**: `http://localhost:28080/api/v1/health`
+- **Swagger API Docs**: `http://<PUBLIC_IP_CTY>:28080/docs`
+- **Healthcheck**: `http://<PUBLIC_IP_CTY>:28080/api/v1/health`
 
-**Checklist xác nhận đạt chuẩn trước khi xin Public Port `28080`**:
+> [!NOTE]
+> - **Không gặp lỗi CORS khi truy cập qua Public IP / Domain**: Next.js Static Export (`poc/frontend/out/`) được FastAPI phục vụ cùng origin trên cổng `28080`, toàn bộ API/MJPEG dùng Relative URL (`/api/v1/...`) và WebSocket tự nhận diện `ws://` (HTTP) hoặc `wss://` (HTTPS) theo `window.location.host`.
+> - **`RATE_LIMIT_PER_MINUTE=1800`** trong `.env` đảm bảo nhiều người phía khách hàng dùng chung 1 IP mạng công ty/nhà máy cùng mở Live View không bị chặn HTTP `429`.
+
+### Checklist nghiệm thu trực tiếp qua Public Port `28080`
+- [ ] Tắt OpenVPN trên laptop (hoặc dùng điện thoại 4G/5G), mở `http://<PUBLIC_IP_CTY>:28080` tải giao diện nhanh, không lỗi trắng trang.
 - [ ] Cả 4 camera (`Tăng trọng 1`, `Tăng trọng 2`, `Tăng trọng 3`, `Định hình 2`) hiển thị mượt, badge góc trên-phải báo `Trực tiếp`.
-- [ ] `GET http://localhost:28080/api/v1/config` trả về `"active_provider": "CUDAExecutionProvider"`.
+- [ ] `GET http://<PUBLIC_IP_CTY>:28080/api/v1/config` trả về `"active_provider": "CUDAExecutionProvider"`.
 - [ ] `nvidia-smi` trên `aiot` cho thấy tiến trình Python tiêu thụ **`<= 1024 MiB` VRAM**.
-- [ ] BBox nhân viên di chuyển bám sát khung hình (không bị trễ pha Kalman, không bị treo bóng ma). Nhân viên trong vùng vẽ viền xanh lá `Nhân viên #ID` + chấm chân; nhân viên ngoài vùng làm mờ `#ID`.
+- [ ] BBox nhân viên bám sát khung hình (không trễ pha Kalman, không treo bóng ma). Nhân viên trong vùng vẽ viền xanh lá `Nhân viên #ID` + chấm chân; nhân viên ngoài vùng làm mờ `#ID`.
 - [ ] Kiểm tra đủ 3 màu HUD:
-  - 🟢 **Xanh lá**: `CÓ NHÂN VIÊN` (`{N} người trong vùng`) và chuyển nhanh sang `Vừa rời khỏi vùng` trong `2s` khi vừa rời vùng.
+  - 🟢 **Xanh lá**: `CÓ NHÂN VIÊN` (`{N} người trong vùng`) và chuyển sang `Vừa rời khỏi vùng` trong `2s` khi vừa rời vùng.
   - 🟡 **Vàng**: `VÙNG TRỐNG` (`không có người 00:02` → `00:11`).
   - 🔴 **Đỏ**: `KHÔNG CÓ NHÂN VIÊN` (`Cảnh báo · vùng trống 00:12`), viền đỏ `3px` quanh toàn khung camera, tăng `Số lần cảnh báo`, cộng dồn `Tổng thời gian cảnh báo`, và vẽ đúng dải màu trên `Dòng thời gian (30p gần nhất)`.
-- [ ] Kiểm tra nút **Phóng to (Focus Modal)** → chuyển `Luồng chính / Luồng phụ`, bấm **Reset thống kê**, thử **Vẽ vùng**, và mở tab **Video & Tách frame**.
-- [ ] Mở DevTools (`F12` → tab **Network** & **Console**): xác nhận WebSocket `ws://localhost:28080/api/v1/ws/detections` kết nối trạng thái `101 Switching Protocols`, không có lỗi đỏ 404/500.
+- [ ] Kiểm tra **Phóng to (Focus Modal)** → chuyển `Luồng chính / Luồng phụ`, bấm **Reset thống kê**, thử **Vẽ vùng**, và mở tab **Video & Tách frame**.
+- [ ] Mở DevTools (`F12` → **Network** & **Console**): xác nhận WebSocket `/api/v1/ws/detections` kết nối trạng thái `101 Switching Protocols`, không có lỗi đỏ 404/500.
 
 ---
 
-## 10. Giai Đoạn 8 — Bàn Giao Cho IT Công Ty Mở Port Public `28080`
+## 10. Giai Đoạn 8 — Lưu Ý Khi Gắn Domain HTTPS Qua Nginx (Tùy Chọn)
 
-Sau khi test qua Termius đạt 100% checklist ở trên, gửi yêu cầu cho bộ phận IT / Hạ tầng công ty với thông tin sau:
-
-- **Server đích (LAN)**: `192.168.1.170` (`aiot`)
-- **Port cần mở / NAT / Reverse Proxy**: **Duy nhất 1 cổng TCP `28080`**
-- **Giao thức đi qua cổng `28080`**: HTTP/1.1 (Next.js UI + REST API + MJPEG stream) và WebSocket (`Upgrade: websocket` tại `/api/v1/ws/detections`).
-- **Không cần sửa bất kỳ dòng code nào**: Frontend dùng 100% Relative URL (`/api/v1/...`) và tự nhận diện `ws://` (HTTP) hoặc `wss://` (HTTPS) theo `window.location.host`.
-
-### Nếu IT công ty cấu hình Nginx Reverse Proxy gắn Domain HTTPS (ví dụ `https://tranhan-poc.atin.vn`)
-Gửi kèm block cấu hình Nginx chuẩn sau để WebSocket và luồng MJPEG không bị nghẽn buffer:
+Hiện tại public trực tiếp TCP port **`28080`** đã chạy trọn vẹn 100%. Nếu sau này IT công ty bọc thêm **Nginx Reverse Proxy** để gắn Domain HTTPS (ví dụ `https://tranhan-poc.atin.vn`), gửi cho IT đoạn cấu hình chuẩn sau để WebSocket và luồng MJPEG không bị nghẽn buffer:
 
 ```nginx
 location / {

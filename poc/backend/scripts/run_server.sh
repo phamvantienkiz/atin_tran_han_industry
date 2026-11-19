@@ -4,7 +4,7 @@ set -euo pipefail
 # Chuyển về thư mục poc/backend bất kể gọi script từ đâu
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKEND_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-FRONTEND_DIR="$(cd "${BACKEND_DIR}/../frontend" && pwd)"
+FRONTEND_SRC_DIR="$(cd "${BACKEND_DIR}/../frontend" && pwd)"
 
 # 1. Thoát Conda (base) nếu shell tự kích hoạt để bảo vệ cô lập môi trường
 conda deactivate 2>/dev/null || true
@@ -20,9 +20,9 @@ fi
 PORT="${PORT:-28080}"
 
 # 3. Nếu chưa có poc/frontend/out/index.html hoặc có truyền cờ --build thì tự động build Next.js
-if [ "${1:-}" = "--build" ] || [ ! -f "${FRONTEND_DIR}/out/index.html" ]; then
+if [ "${1:-}" = "--build" ] || [ ! -f "${FRONTEND_SRC_DIR}/out/index.html" ]; then
     echo "[1/2] Đang build giao diện Next.js Static Export (poc/frontend/out)..."
-    cd "${FRONTEND_DIR}"
+    cd "${FRONTEND_SRC_DIR}"
     if [ ! -d "node_modules" ]; then
         npm install --no-audit --no-fund
     fi
