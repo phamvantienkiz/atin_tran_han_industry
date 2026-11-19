@@ -125,7 +125,7 @@ class PersonZoneDetector:
         nvr_user: str,
         nvr_pass: str,
         load_cameras_fn: Callable[[], list[dict[str, Any]]],
-        conf: float = 0.45,
+        conf: float = 0.25,
         imgsz: int = 640,
         interval_sec: float = 0.2,
     ) -> None:
