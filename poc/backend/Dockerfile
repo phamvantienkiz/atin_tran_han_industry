@@ -38,8 +38,9 @@ COPY backend/scripts ./scripts
 # Install backend dependencies + CUDA 12 ONNX Runtime GPU (uses container's native CUDA 12.4 + cuDNN 9)
 RUN python3 -m pip install --upgrade pip \
     && python3 -m pip install . \
-    && python3 -m pip uninstall -y opencv-python onnxruntime || true \
-    && python3 -m pip install --force-reinstall opencv-python-headless "onnxruntime-gpu==1.23.2"
+    && (python3 -m pip uninstall -y opencv-python onnxruntime || true) \
+    && python3 -m pip install --force-reinstall opencv-python-headless "onnxruntime-gpu==1.23.2" \
+    && python3 -c "import uvicorn, fastapi, cv2, onnxruntime, supervision, app.main; print('Verified app.main & runtime imports OK:', onnxruntime.get_available_providers())"
 
 # Copy compiled Next.js static export from Stage 1
 COPY --from=frontend-builder /build/frontend/out /app/frontend/out

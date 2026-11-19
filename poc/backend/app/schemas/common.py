@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any
 
 
@@ -26,7 +26,7 @@ def build_error_payload(
             "details": details,
         },
         "meta": {
-            "timestamp": datetime.now(UTC).isoformat(timespec="seconds"),
+            "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "path": path,
             "requestId": request_id,
         },

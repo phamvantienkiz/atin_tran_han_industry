@@ -2,7 +2,7 @@
 name = "tranhan-ai-backend"
 version = "0.1.0"
 description = "ATIN Tran Han Industry — FastAPI Backend & AI Core (PoC to Production)"
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 dependencies = [
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.32.0",
@@ -53,8 +53,8 @@ asyncio_default_fixture_loop_scope = "function"
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py310"
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.10"
 ignore_missing_imports = true
