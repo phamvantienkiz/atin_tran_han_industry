@@ -474,7 +474,7 @@ async function init() {
   await pollActiveRecords();
   await pollDetections();
   setInterval(pollActiveRecords, 1000);
-  setInterval(pollDetections, 1000);
+  setInterval(pollDetections, 350);
 }
 
 init();
