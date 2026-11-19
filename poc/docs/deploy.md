@@ -220,27 +220,36 @@ EOF
 
 ---
 
-## 8. Giai Đoạn 6 — Build Next.js Static Export & Khởi Chạy Bằng 1 Lệnh Duy Nhất
+## 8. Giai Đoạn 6 — Build Next.js Static Export & Khởi Chạy Server (Tắt Termius Vẫn Chạy)
 
+Script `scripts/run_server.sh` hỗ trợ đầy đủ **2 chế độ** (đều chạy qua `uv run`, không cần `tmux` hay `sudo`):
+
+### Chế độ 1 (Khuyến nghị cho Public Port `28080` — Tắt Termius server vẫn chạy 24/7)
 ```bash
 cd ~/projects/tien/atin_tran_han_industry/poc/backend
 chmod +x scripts/run_server.sh
 
-# Chạy lần đầu kèm cờ --build: tự cài node_modules (nếu thiếu), build poc/frontend/out/ và chạy Uvicorn trên :28080
+# Khởi chạy nền (thêm --build nếu cần build lại Next.js)
+./scripts/run_server.sh start
+```
+
+**Các lệnh quản lý hằng ngày (1 dòng, không cần `tmux`)**:
+```bash
+./scripts/run_server.sh status          # Kiểm tra PID, port 28080 và VRAM đang dùng
+./scripts/run_server.sh logs            # Xem log trực tiếp (bấm Ctrl+C chỉ thoát xem log, server vẫn chạy)
+./scripts/run_server.sh restart         # Dừng sạch & khởi động lại (thêm --build nếu sửa Frontend)
+./scripts/run_server.sh stop            # Gửi SIGINT dừng sạch toàn bộ nhóm tiến trình + nhả 100% VRAM & port 28080
+```
+
+### Chế độ 2 (Chạy trực tiếp trên terminal khi đang debug — bấm `Ctrl + C` dừng ngay)
+```bash
 ./scripts/run_server.sh --build
 ```
 
-### Dấu hiệu khởi động thành công trên màn hình Termius
-1. `[1/2] Đang build giao diện Next.js Static Export (poc/frontend/out)...` → kết thúc với `✓ Exporting (2/2)`.
-2. `[2/2] Đang khởi động ATIN Trần Hân PoC (FastAPI + Next.js + GPU AI) tại http://0.0.0.0:28080 ...`
-3. Log AI Core hiển thị:
-   `Loaded YOLO ONNX model=yolo26s_fp16.onnx active_provider=CUDAExecutionProvider ...`
-4. `Uvicorn running on http://0.0.0.0:28080 (Press CTRL+C to quit)`
-
-### Cách dừng an toàn (Bắt buộc trên server dùng chung)
-- Nhấn **`Ctrl + C`** 1 lần trực tiếp trên cửa sổ Termius đang chạy `./scripts/run_server.sh`.
-- Nhờ `exec uv run --no-sync uvicorn ... --timeout-graceful-shutdown 2` và cơ chế shutdown trong `lifespan`, toàn bộ WebSocket, luồng AI, kết nối NVR và VRAM GPU được giải phóng sạch trong `<= 2 giây`.
-- Có thể kiểm tra lại bằng `nvidia-smi` và `ss -tulpn | grep 28080`.
+### Dấu hiệu khởi động thành công trong log (`./scripts/run_server.sh logs`)
+1. `Loaded YOLO ONNX model=yolo26s_best.onnx active_provider=CUDAExecutionProvider ... vram_limit_mb=1024`
+2. `Starting NVR stream reader cam=ch16 / ch17 / ch18 / ch21` → `HTTP/1.1 200 OK`
+3. `Uvicorn running on http://0.0.0.0:28080`
 
 *(Nếu muốn kiểm tra nhanh bằng `curl` ở một tab SSH thứ hai trong khi server đang chạy)*:
 ```bash
