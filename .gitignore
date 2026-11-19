@@ -222,7 +222,7 @@ __marimo__/
 # user customs
 customers/
 docs/ai/
-view/docs/linkcam.md
+poc/docs/linkcam.md
 .vscode/
 runs/
 *.cache
