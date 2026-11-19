@@ -51,70 +51,6 @@ def resolve_camera_task(cam: dict[str, Any]) -> str:
     return "none"
 
 
-class _CameraStreamReader:
-    """Background MJPEG (subtype=1) reader that keeps the latest decoded frame."""
-
-    def __init__(self, nvr_base_url: str, nvr_user: str, nvr_pass: str, channel: int) -> None:
-        self.url = f"{nvr_base_url}/cgi-bin/mjpg/video.cgi?channel={channel}&subtype=1"
-        self.auth = httpx.DigestAuth(nvr_user, nvr_pass)
-        self._lock = threading.Lock()
-        self._frame: np.ndarray | None = None
-        self._frame_ts: float = 0.0
-        self._error: str | None = None
-        self._stop = threading.Event()
-        self._thread = threading.Thread(target=self._run, name=f"mjpeg-ch{channel}", daemon=True)
-        self._thread.start()
-
-    def stop(self) -> None:
-        self._stop.set()
-
-    def get_latest(self) -> tuple[np.ndarray | None, float, str | None]:
-        with self._lock:
-            return self._frame, self._frame_ts, self._error
-
-    def _run(self) -> None:
-        timeout = httpx.Timeout(8.0, read=15.0)
-        with httpx.Client(auth=self.auth, timeout=timeout) as client:
-            while not self._stop.is_set():
-                buf = bytearray()
-                try:
-                    with client.stream("GET", self.url) as resp:
-                        if resp.status_code != 200:
-                            with self._lock:
-                                self._error = f"HTTP {resp.status_code}"
-                            self._stop.wait(1.5)
-                            continue
-                        with self._lock:
-                            self._error = None
-                        for chunk in resp.iter_bytes(chunk_size=16384):
-                            if self._stop.is_set():
-                                break
-                            buf.extend(chunk)
-                            while True:
-                                start = buf.find(b"\xff\xd8")
-                                if start == -1:
-                                    if len(buf) > 65536:
-                                        buf.clear()
-                                    break
-                                end = buf.find(b"\xff\xd9", start + 2)
-                                if end == -1:
-                                    if start > 0:
-                                        del buf[:start]
-                                    break
-                                jpg = bytes(buf[start : end + 2])
-                                del buf[: end + 2]
-                                frame = cv2.imdecode(np.frombuffer(jpg, dtype=np.uint8), cv2.IMREAD_COLOR)
-                                if frame is not None:
-                                    with self._lock:
-                                        self._frame = frame
-                                        self._frame_ts = time.time()
-                                        self._error = None
-                except Exception as exc:
-                    with self._lock:
-                        self._error = str(exc)
-                    self._stop.wait(1.0)
-
-
 class PersonZoneDetector:
     """Background CPU worker that runs YOLO26 ONNX models when enabled."""
 
@@ -125,7 +61,7 @@ class PersonZoneDetector:
         nvr_user: str,
         nvr_pass: str,
         load_cameras_fn: Callable[[], list[dict[str, Any]]],
-        conf: float = 0.25,
+        conf: float = 0.35,
         imgsz: int = 640,
         interval_sec: float = 0.2,
     ) -> None:
@@ -142,8 +78,6 @@ class PersonZoneDetector:
         self.device_label = "GPU" if self.use_cuda else "CPU"
 
         self._models: dict[str, YOLO] = {}
-        self._readers: dict[str, _CameraStreamReader] = {}
-        self._last_frame_ts: dict[str, float] = {}
         self._lock = threading.Lock()
         self._results: dict[str, dict[str, Any]] = {}
         self._stats: dict[str, dict[str, Any]] = {}
@@ -159,9 +93,6 @@ class PersonZoneDetector:
 
     def stop(self) -> None:
         self._stop_event.set()
-        for reader in self._readers.values():
-            reader.stop()
-        self._readers.clear()
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=3.0)
 
@@ -359,36 +290,21 @@ class PersonZoneDetector:
                     self._stop_event.wait(0.8)
                     continue
 
-                active_ids = {cam["id"] for cam, _ in targets}
-                for stale_id in list(self._readers.keys()):
-                    if stale_id not in active_ids:
-                        self._readers.pop(stale_id).stop()
-                        self._last_frame_ts.pop(stale_id, None)
-
-                for cam, _ in targets:
-                    cid = cam["id"]
-                    if cid not in self._readers:
-                        self._readers[cid] = _CameraStreamReader(
-                            self.nvr_base_url, self.nvr_user, self.nvr_pass, cam["channel"]
-                        )
-
-                now = time.time()
-                need_snapshot: list[tuple[dict[str, Any], str]] = []
-                for cam, task_key in targets:
-                    if self._stop_event.is_set():
-                        break
-                    cid = cam["id"]
-                    frame, frame_ts, _err = self._readers[cid].get_latest()
-                    # Use fresh MJPEG frame if available (< 3s old)
-                    if frame is not None and (now - frame_ts) < 3.0:
-                        if frame_ts <= self._last_frame_ts.get(cid, 0.0):
-                            continue
-                        self._last_frame_ts[cid] = frame_ts
+                with ThreadPoolExecutor(max_workers=len(targets)) as pool:
+                    future_map = {
+                        pool.submit(self._fetch_frame, client, cam): (cam, task_key)
+                        for cam, task_key in targets
+                    }
+                    for fut in as_completed(future_map):
+                        if self._stop_event.is_set():
+                            break
+                        cam, task_key = future_map[fut]
                         try:
-                            result = self._detect_frame(cam, task_key, frame, None)
+                            frame, fetch_err = fut.result()
+                            result = self._detect_frame(cam, task_key, frame, fetch_err)
                         except Exception as exc:
                             result = {
-                                "cam_id": cid,
+                                "cam_id": cam["id"],
                                 "ai_task": task_key,
                                 "has_zone": len(cam.get("zone") or []) >= 3,
                                 "alert": False,
@@ -402,42 +318,6 @@ class PersonZoneDetector:
                                 "updated_at": time.time(),
                             }
                         with self._lock:
-                            self._results[cid] = result
-                    elif (now - self._last_frame_ts.get(cid, 0.0)) >= 2.5:
-                        need_snapshot.append((cam, task_key))
-
-                # Fallback to parallel snapshot.cgi only when MJPEG stream has no fresh frame
-                if need_snapshot:
-                    with ThreadPoolExecutor(max_workers=len(need_snapshot)) as pool:
-                        future_map = {
-                            pool.submit(self._fetch_frame, client, cam): (cam, task_key)
-                            for cam, task_key in need_snapshot
-                        }
-                        for fut in as_completed(future_map):
-                            if self._stop_event.is_set():
-                                break
-                            cam, task_key = future_map[fut]
-                            cid = cam["id"]
-                            self._last_frame_ts[cid] = time.time()
-                            try:
-                                frame, fetch_err = fut.result()
-                                result = self._detect_frame(cam, task_key, frame, fetch_err)
-                            except Exception as exc:
-                                result = {
-                                    "cam_id": cid,
-                                    "ai_task": task_key,
-                                    "has_zone": len(cam.get("zone") or []) >= 3,
-                                    "alert": False,
-                                    "person_in_zone": False,
-                                    "in_zone_count": 0,
-                                    "violation_count": 0,
-                                    "total_persons": 0,
-                                    "persons": [],
-                                    "device": self.device_label,
-                                    "error": str(exc),
-                                    "updated_at": time.time(),
-                                }
-                            with self._lock:
-                                self._results[cid] = result
+                            self._results[cam["id"]] = result
 
                 self._stop_event.wait(self.interval_sec)
