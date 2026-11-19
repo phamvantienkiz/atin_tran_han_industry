@@ -83,11 +83,29 @@ class YoloPersonDetector:
             else:
                 providers = ["CPUExecutionProvider"]
 
-            session = ort.InferenceSession(
-                str(self.model_path),
-                sess_options=opts,
-                providers=providers,
-            )
+            try:
+                session = ort.InferenceSession(
+                    str(self.model_path),
+                    sess_options=opts,
+                    providers=providers,
+                )
+            except Exception as exc:
+                fallback_path = self.model_path.parent / "yolo26s_best.onnx"
+                if self.model_path.name == "yolo26s_fp16.onnx" and fallback_path.is_file():
+                    logger.warning(
+                        "Failed to load FP16 model %s (%s); falling back to FP32 model %s",
+                        self.model_path.name,
+                        exc,
+                        fallback_path.name,
+                    )
+                    self.model_path = fallback_path
+                    session = ort.InferenceSession(
+                        str(self.model_path),
+                        sess_options=opts,
+                        providers=providers,
+                    )
+                else:
+                    raise
             inp = session.get_inputs()[0]
             self._input_name = inp.name
             dim0 = inp.shape[0] if inp.shape else 1
