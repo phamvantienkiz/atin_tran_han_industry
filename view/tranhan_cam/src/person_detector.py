@@ -10,6 +10,7 @@ from typing import Any, Callable
 import cv2
 import httpx
 import numpy as np
+import torch
 from ultralytics import YOLO
 
 PPE_VIOLATION_CLASSES = {"incorrect_mask", "no_glove", "no_hairnet", "no_mask"}
@@ -42,9 +43,9 @@ def resolve_camera_task(cam: dict[str, Any]) -> str:
         return explicit
 
     text = f"{cam.get('name', '')} {cam.get('note', '')}".lower()
-    if "bảo hộ" in text or "bao ho" in text or "ppe" in text or "định hình" in text or "dinh hinh" in text:
+    if "bảo hộ" in text or "bao ho" in text or "ppe" in text:
         return "cam1_ppe"
-    if "tăng trọng" in text or "tang trong" in text:
+    if "tăng trọng" in text or "tang trong" in text or "định hình" in text or "dinh hinh" in text:
         return "cam2_person"
     return "none"
 
@@ -71,6 +72,8 @@ class PersonZoneDetector:
         self.conf = conf
         self.imgsz = imgsz
         self.interval_sec = interval_sec
+        self.use_cuda = torch.cuda.is_available()
+        self.device: int | str = 0 if self.use_cuda else "cpu"
 
         self._models: dict[str, YOLO] = {}
         self._lock = threading.Lock()
@@ -98,6 +101,10 @@ class PersonZoneDetector:
     def _ensure_model(self, task_key: str) -> YOLO:
         if task_key not in self._models:
             path = self.model_paths[task_key]
+            if self.use_cuda:
+                pt_path = path.with_suffix(".pt")
+                if pt_path.is_file():
+                    path = pt_path
             if not path.is_file():
                 raise FileNotFoundError(f"Không tìm thấy model: {path}")
             self._models[task_key] = YOLO(str(path), task="detect")
@@ -153,7 +160,8 @@ class PersonZoneDetector:
         predict_kwargs: dict[str, Any] = {
             "conf": self.conf,
             "imgsz": self.imgsz,
-            "device": "cpu",
+            "device": self.device,
+            "half": self.use_cuda,
             "verbose": False,
         }
         if task_key == "cam2_person":
