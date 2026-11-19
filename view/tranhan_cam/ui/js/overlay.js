@@ -222,7 +222,8 @@ export function renderAiHud(hudEl, cam, det) {
   }
 
   statsEl.textContent = `Tổng thời gian cảnh báo: ${totalAlertStr} · Số lần cảnh báo: ${alertCount}`;
-  elapsedEl.textContent = durStr;
+  const perfTag = det.inference_ms !== undefined ? ` · ${det.device || 'AI'} ${det.inference_ms}ms` : '';
+  elapsedEl.textContent = `${durStr}${perfTag}`;
   const timeline = det.timeline || [];
   timelineEl.innerHTML = timeline
     .map((v) => `<span class="ai-hud-seg ${v ? 'is-alert' : 'is-clear'}"></span>`)

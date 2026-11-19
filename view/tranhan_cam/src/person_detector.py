@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 import time
 from pathlib import Path
@@ -62,7 +63,7 @@ class PersonZoneDetector:
         load_cameras_fn: Callable[[], list[dict[str, Any]]],
         conf: float = 0.45,
         imgsz: int = 640,
-        interval_sec: float = 0.5,
+        interval_sec: float = 0.2,
     ) -> None:
         self.model_paths = model_paths
         self.nvr_base_url = nvr_base_url
@@ -74,6 +75,7 @@ class PersonZoneDetector:
         self.interval_sec = interval_sec
         self.use_cuda = torch.cuda.is_available()
         self.device: int | str = 0 if self.use_cuda else "cpu"
+        self.device_label = "GPU" if self.use_cuda else "CPU"
 
         self._models: dict[str, YOLO] = {}
         self._lock = threading.Lock()
@@ -110,19 +112,29 @@ class PersonZoneDetector:
             self._models[task_key] = YOLO(str(path), task="detect")
         return self._models[task_key]
 
-    def _detect_camera(
+    def _fetch_frame(self, client: httpx.Client, cam: dict[str, Any]) -> tuple[np.ndarray | None, str | None]:
+        url = f"{self.nvr_base_url}/cgi-bin/snapshot.cgi?channel={cam['channel']}"
+        resp = client.get(url)
+        if resp.status_code != 200:
+            return None, f"HTTP {resp.status_code}"
+        buf = np.frombuffer(resp.content, dtype=np.uint8)
+        frame = cv2.imdecode(buf, cv2.IMREAD_COLOR)
+        if frame is None:
+            return None, "Decode failed"
+        return frame, None
+
+    def _detect_frame(
         self,
-        client: httpx.Client,
         cam: dict[str, Any],
         task_key: str,
+        frame: np.ndarray | None,
+        fetch_error: str | None,
     ) -> dict[str, Any]:
         cam_id = cam["id"]
         zone = cam.get("zone") or []
         has_zone = len(zone) >= 3
-        url = f"{self.nvr_base_url}/cgi-bin/snapshot.cgi?channel={cam['channel']}"
 
-        resp = client.get(url)
-        if resp.status_code != 200:
+        if fetch_error or frame is None:
             return {
                 "cam_id": cam_id,
                 "ai_task": task_key,
@@ -133,24 +145,8 @@ class PersonZoneDetector:
                 "violation_count": 0,
                 "total_persons": 0,
                 "persons": [],
-                "error": f"HTTP {resp.status_code}",
-                "updated_at": time.time(),
-            }
-
-        buf = np.frombuffer(resp.content, dtype=np.uint8)
-        frame = cv2.imdecode(buf, cv2.IMREAD_COLOR)
-        if frame is None:
-            return {
-                "cam_id": cam_id,
-                "ai_task": task_key,
-                "has_zone": has_zone,
-                "alert": False,
-                "person_in_zone": False,
-                "in_zone_count": 0,
-                "violation_count": 0,
-                "total_persons": 0,
-                "persons": [],
-                "error": "Decode failed",
+                "device": self.device_label,
+                "error": fetch_error or "Decode failed",
                 "updated_at": time.time(),
             }
 
@@ -235,6 +231,7 @@ class PersonZoneDetector:
             "violation_count": violation_count,
             "total_persons": len(detections),
             "persons": detections,
+            "device": self.device_label,
             "inference_ms": inference_ms,
             "updated_at": now,
             **stats,
@@ -294,26 +291,34 @@ class PersonZoneDetector:
                     self._stop_event.wait(0.8)
                     continue
 
-                for cam, task_key in targets:
-                    if self._stop_event.is_set():
-                        break
-                    try:
-                        result = self._detect_camera(client, cam, task_key)
-                    except Exception as exc:
-                        result = {
-                            "cam_id": cam["id"],
-                            "ai_task": task_key,
-                            "has_zone": len(cam.get("zone") or []) >= 3,
-                            "alert": False,
-                            "person_in_zone": False,
-                            "in_zone_count": 0,
-                            "violation_count": 0,
-                            "total_persons": 0,
-                            "persons": [],
-                            "error": str(exc),
-                            "updated_at": time.time(),
-                        }
-                    with self._lock:
-                        self._results[cam["id"]] = result
+                with ThreadPoolExecutor(max_workers=len(targets)) as pool:
+                    future_map = {
+                        pool.submit(self._fetch_frame, client, cam): (cam, task_key)
+                        for cam, task_key in targets
+                    }
+                    for fut in as_completed(future_map):
+                        if self._stop_event.is_set():
+                            break
+                        cam, task_key = future_map[fut]
+                        try:
+                            frame, fetch_err = fut.result()
+                            result = self._detect_frame(cam, task_key, frame, fetch_err)
+                        except Exception as exc:
+                            result = {
+                                "cam_id": cam["id"],
+                                "ai_task": task_key,
+                                "has_zone": len(cam.get("zone") or []) >= 3,
+                                "alert": False,
+                                "person_in_zone": False,
+                                "in_zone_count": 0,
+                                "violation_count": 0,
+                                "total_persons": 0,
+                                "persons": [],
+                                "device": self.device_label,
+                                "error": str(exc),
+                                "updated_at": time.time(),
+                            }
+                        with self._lock:
+                            self._results[cam["id"]] = result
 
                 self._stop_event.wait(self.interval_sec)
