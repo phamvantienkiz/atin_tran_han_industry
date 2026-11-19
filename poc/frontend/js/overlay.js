@@ -2,8 +2,7 @@ const ZONE_COLOR = '#1f5fff';
 const ALERT_COLOR = '#ef4444';
 const SAFE_COLOR = '#10b981';
 
-export function drawCardOverlay(card) {
-  const c = card.canvas;
+export function drawOverlay(c, { zone, detection, zoneEditor } = {}) {
   const w = c.clientWidth;
   const h = c.clientHeight;
   if (!w || !h) return;
@@ -18,10 +17,11 @@ export function drawCardOverlay(card) {
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
   g.clearRect(0, 0, w, h);
 
+  const isEditing = Boolean(zoneEditor?.active);
+
   // 1. Saved Poly Zone
-  const zone = card.cam.zone;
-  const personInZone = Boolean(card.detection?.person_in_zone);
-  if (zone && zone.length >= 3 && !card.zoneEditor.active) {
+  const personInZone = Boolean(detection?.person_in_zone);
+  if (zone && zone.length >= 3 && !isEditing) {
     g.beginPath();
     zone.forEach((p, idx) => {
       if (idx === 0) g.moveTo(p.x * w, p.y * h);
@@ -36,8 +36,8 @@ export function drawCardOverlay(card) {
   }
 
   // 1b. Detected Person Bounding Boxes & Diagonal Center Points
-  const persons = card.detection?.persons || [];
-  if (!card.zoneEditor.active && persons.length > 0) {
+  const persons = detection?.persons || [];
+  if (!isEditing && persons.length > 0) {
     g.font = '600 11px Inter, system-ui, sans-serif';
     for (const p of persons) {
       const x1 = p.x1 * w;
@@ -72,8 +72,8 @@ export function drawCardOverlay(card) {
   }
 
   // 2. In-progress Zone Editor
-  if (card.zoneEditor.active) {
-    const pts = card.zoneEditor.points;
+  if (isEditing) {
+    const pts = zoneEditor.points;
     if (pts.length > 0) {
       g.beginPath();
       pts.forEach((p, idx) => {
@@ -116,4 +116,21 @@ export function drawCardOverlay(card) {
       }
     }
   }
+}
+
+export function drawCardOverlay(card) {
+  drawOverlay(card.canvas, {
+    zone: card.cam.zone,
+    detection: card.detection,
+    zoneEditor: card.zoneEditor,
+  });
+}
+
+export function drawFocusOverlay(canvas, cam, detection) {
+  if (!canvas || !cam) return;
+  drawOverlay(canvas, {
+    zone: cam.zone,
+    detection,
+    zoneEditor: null,
+  });
 }

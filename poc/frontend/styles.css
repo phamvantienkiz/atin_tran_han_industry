@@ -716,6 +716,7 @@ body {
 
 /* Focus Viewport */
 .focus-viewport {
+  position: relative;
   width: 100%;
   aspect-ratio: 16 / 9;
   background: var(--bg-subtle);

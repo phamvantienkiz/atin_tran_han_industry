@@ -1,7 +1,7 @@
 import { api } from './api.js';
 import { CameraCard } from './camera-card.js';
 import { DatasetPage } from './dataset-page.js';
-import { drawCardOverlay } from './overlay.js';
+import { drawCardOverlay, drawFocusOverlay } from './overlay.js';
 import { parseZoneJson } from './zone-editor.js';
 
 const gridEl = document.getElementById('camera-grid');
@@ -19,6 +19,7 @@ const focusModal = document.getElementById('focus-modal');
 const focusTitle = document.getElementById('focus-modal-title');
 const focusSub = document.getElementById('focus-modal-sub');
 const focusImg = document.getElementById('focus-img');
+const focusCanvas = document.getElementById('focus-canvas');
 const focusDownload = document.getElementById('focus-download');
 const btnFocusRecord = document.getElementById('btn-focus-record');
 const btnFocusRecordLabel = document.getElementById('btn-focus-record-label');
@@ -116,7 +117,7 @@ function openFocusModal(cam) {
   focusRetries = 0;
   focusTitle.textContent = cam.name;
   focusSub.textContent = cam.note ? `Kênh ${cam.channel} · ${cam.note}` : `Kênh ${cam.channel}`;
-  focusDownload.href = `/api/cameras/${cam.id}/snapshot.jpg`;
+  focusDownload.href = `/api/v1/cameras/${cam.id}/snapshot.jpg`;
   focusDownload.download = `${cam.id}-snapshot.jpg`;
   recordMenu.classList.add('hidden');
   btnFocusRecord.setAttribute('aria-expanded', 'false');
@@ -127,6 +128,9 @@ function openFocusModal(cam) {
   focusModal.classList.remove('hidden');
   syncRecordUi();
   setFocusSubtype(0, 150);
+  requestAnimationFrame(() => drawFocusOverlay(focusCanvas, cam, latestDetections[cam.id] || null));
+  api.setDetectionFocus(cam.id).catch(() => {});
+  scheduleDetectionPoll(350);
 }
 
 function setFocusSubtype(subtype, delayMs = 0) {
@@ -141,7 +145,7 @@ function setFocusSubtype(subtype, delayMs = 0) {
   const camId = focusCam.id;
   focusStreamTimer = setTimeout(() => {
     if (!focusCam || focusCam.id !== camId) return;
-    focusImg.src = `/api/cameras/${camId}/mjpeg?subtype=${subtype}&t=${Date.now()}`;
+    focusImg.src = `/api/v1/cameras/${camId}/mjpeg?subtype=${subtype}&t=${Date.now()}`;
   }, delayMs);
 }
 
@@ -158,7 +162,7 @@ focusImg.addEventListener('error', () => {
   clearTimeout(focusStreamTimer);
   focusStreamTimer = setTimeout(() => {
     if (!focusCam || focusCam.id !== camId) return;
-    focusImg.src = `/api/cameras/${camId}/mjpeg?subtype=${sub}&retry=${focusRetries}&t=${Date.now()}`;
+    focusImg.src = `/api/v1/cameras/${camId}/mjpeg?subtype=${sub}&retry=${focusRetries}&t=${Date.now()}`;
   }, 450);
 });
 
@@ -205,7 +209,11 @@ function closeFocusModal() {
   recordMenu.classList.add('hidden');
   btnFocusRecord.setAttribute('aria-expanded', 'false');
   focusImg.removeAttribute('src');
+  const g = focusCanvas.getContext('2d');
+  g?.clearRect(0, 0, focusCanvas.width, focusCanvas.height);
   focusCam = null;
+  api.setDetectionFocus(null).catch(() => {});
+  scheduleDetectionPoll(1000);
   if (closedCamId) {
     cards[closedCamId]?.startStream();
   }
@@ -428,16 +436,32 @@ btnImportZone.addEventListener('click', async () => {
   }
 });
 
+let latestDetections = {};
+let detectionPollTimer = null;
+
+function scheduleDetectionPoll(intervalMs) {
+  clearInterval(detectionPollTimer);
+  detectionPollTimer = setInterval(pollDetections, intervalMs);
+}
+
 window.addEventListener('resize', () => {
   Object.values(cards).forEach((c) => drawCardOverlay(c));
+  if (focusCam) {
+    drawFocusOverlay(focusCanvas, focusCam, latestDetections[focusCam.id] || null);
+  }
 });
 
 async function pollDetections() {
   try {
-    const data = await api.detections();
+    const activeFocusId = focusCam?.id || null;
+    const data = await api.detections(activeFocusId);
+    latestDetections = data;
     Object.entries(cards).forEach(([camId, card]) => {
       card.setDetection(data[camId] || null);
     });
+    if (focusCam) {
+      drawFocusOverlay(focusCanvas, focusCam, data[focusCam.id] || null);
+    }
   } catch (_) {}
 }
 
@@ -451,7 +475,7 @@ async function init() {
   await pollActiveRecords();
   await pollDetections();
   setInterval(pollActiveRecords, 1000);
-  setInterval(pollDetections, 1000);
+  scheduleDetectionPoll(1000);
 }
 
 init();

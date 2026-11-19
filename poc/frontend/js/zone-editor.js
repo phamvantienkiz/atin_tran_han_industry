@@ -41,7 +41,7 @@ export class ZoneEditor {
     this.card.canvas.classList.add('drawing');
     this.card.zoneToolbar.classList.remove('hidden');
 
-    this.card.zoneBg.src = `/api/cameras/${this.card.cam.id}/snapshot.jpg?t=${Date.now()}`;
+    this.card.zoneBg.src = `/api/v1/cameras/${this.card.cam.id}/snapshot.jpg?t=${Date.now()}`;
     this.card.zoneBg.classList.remove('hidden');
     window.addEventListener('keydown', this._onKeyDown);
     drawCardOverlay(this.card);

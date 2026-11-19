@@ -97,7 +97,7 @@ export class DatasetPage {
           </div>
           <div class="data-card-actions">
             <button type="button" class="btn btn-primary btn-extract">Tách frame</button>
-            <a class="btn btn-subtle" href="/api/storages/videos/${encodeURIComponent(v.filename)}/download" download="${v.filename}">Tải MP4</a>
+            <a class="btn btn-subtle" href="/api/v1/storages/videos/${encodeURIComponent(v.filename)}/download" download="${v.filename}">Tải MP4</a>
           </div>
         </div>
       `;
@@ -158,7 +158,7 @@ export class DatasetPage {
       const thumbsHtml = (fs.previews || [])
         .map(
           (img) =>
-            `<img src="/api/storages/frames/${encodeURIComponent(fs.folder)}/preview/${encodeURIComponent(img)}" alt="${img}" loading="lazy" />`,
+            `<img src="/api/v1/storages/frames/${encodeURIComponent(fs.folder)}/preview/${encodeURIComponent(img)}" alt="${img}" loading="lazy" />`,
         )
         .join('');
 
@@ -180,7 +180,7 @@ export class DatasetPage {
 
         ${thumbsHtml ? `<div class="thumb-strip">${thumbsHtml}</div>` : ''}
 
-        <a class="btn btn-subtle btn-full" href="/api/storages/frames/${encodeURIComponent(fs.folder)}/download.zip" download="${fs.folder}.zip">
+        <a class="btn btn-subtle btn-full" href="/api/v1/storages/frames/${encodeURIComponent(fs.folder)}/download.zip" download="${fs.folder}.zip">
           Tải bộ ảnh (.zip)
         </a>
       `;

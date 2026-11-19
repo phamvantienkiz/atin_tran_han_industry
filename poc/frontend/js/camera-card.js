@@ -43,7 +43,7 @@ export class CameraCard {
               <polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5 12 2" />
             </svg>
           </button>
-          <a class="icon-btn btn-snap" href="/api/cameras/${cam.id}/snapshot.jpg" download="${cam.id}-snapshot.jpg" title="Tải ảnh chụp nhanh" aria-label="Tải ảnh chụp nhanh ${cam.name}">
+          <a class="icon-btn btn-snap" href="/api/v1/cameras/${cam.id}/snapshot.jpg" download="${cam.id}-snapshot.jpg" title="Tải ảnh chụp nhanh" aria-label="Tải ảnh chụp nhanh ${cam.name}">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
               <circle cx="12" cy="13" r="4" />
@@ -179,12 +179,12 @@ export class CameraCard {
     if (this.cam.mode === 'snapshot') {
       const loadSnap = () => {
         if (this.destroyed) return;
-        this.streamImg.src = `/api/cameras/${this.cam.id}/snapshot.jpg?t=${Date.now()}`;
+        this.streamImg.src = `/api/v1/cameras/${this.cam.id}/snapshot.jpg?t=${Date.now()}`;
       };
       loadSnap();
       this.snapshotTimer = setInterval(loadSnap, 1500);
     } else {
-      this.streamImg.src = `/api/cameras/${this.cam.id}/mjpeg?subtype=${this.cam.subtype ?? 1}&t=${Date.now()}`;
+      this.streamImg.src = `/api/v1/cameras/${this.cam.id}/mjpeg?subtype=${this.cam.subtype ?? 1}&t=${Date.now()}`;
     }
   }
 
