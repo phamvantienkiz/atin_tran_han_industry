@@ -59,22 +59,24 @@ poc/
 
 ---
 
-## 3. Bước 2 — Trên Server `aiot`: Pull Code, Giải Phóng Cổng `28080` & Kiểm Tra GPU Docker
+## 3. Bước 2 — Trên Server `aiot`: Dừng Bản Chạy `.sh` Hiện Tại, Pull Code Mới & Kiểm Tra GPU Docker
 
 SSH vào `tts@192.168.1.170` trên Termius:
 
-### 3.1. Pull code mới & Dừng tiến trình non-Docker cũ đang giữ cổng `28080` (Chỉ làm 1 lần khi chuyển sang Docker)
+### 3.1. Dừng bản chạy `.sh` hiện tại (để giải phóng port `28080` & VRAM) rồi Pull code mới
+Vì hiện tại trên server đang chạy nền bằng `./scripts/run_server.sh start`, bạn gọi lệnh `./scripts/run_server.sh stop` **trước khi `git pull`** để dừng sạch nhóm tiến trình cũ và tránh xung đột quyền file khi pull:
 
 ```bash
+# 1. Dừng sạch server đang chạy nền bằng run_server.sh (nhả 100% port 28080 & VRAM)
+cd ~/projects/tien/atin_tran_han_industry/poc/backend
+./scripts/run_server.sh stop
+```
+```bash
+# 2. Pull code mới nhất từ nhánh jin về
 cd ~/projects/tien/atin_tran_han_industry && git pull origin jin
 ```
 ```bash
-# Giải phóng cổng 28080 từ tiến trình chạy nền cũ (nếu đang chạy)
-fuser -k 28080/tcp 2>/dev/null || true
-rm -f ~/projects/tien/atin_tran_han_industry/poc/backend/logs/server.pid
-```
-```bash
-# Xóa 2 file model PPE cũ (yolo26s_best.onnx / yolo26s_fp16.onnx) để chỉ dùng yolo26s.onnx mới
+# 3. Xóa 2 file model PPE cũ (yolo26s_best.onnx / yolo26s_fp16.onnx) để chỉ dùng yolo26s.onnx mới
 rm -f ~/projects/tien/atin_tran_han_industry/poc/models/yolo26s_best.onnx ~/projects/tien/atin_tran_han_industry/poc/models/yolo26s_fp16.onnx
 ls -lh ~/projects/tien/atin_tran_han_industry/poc/models/
 ```
