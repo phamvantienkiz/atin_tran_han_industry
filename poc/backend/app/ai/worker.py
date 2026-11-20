@@ -5,6 +5,7 @@ from __future__ import annotations
 import threading
 import time
 from collections.abc import Callable
+from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
@@ -49,6 +50,7 @@ class PersonZoneDetector:
         vram_limit_mb: int = 1536,
         target_fps: float = 0.0,
         snap_min_iou: float = 0.25,
+        decode_reduce: int = 1,
         anchor_mode: str = "bottom_center",
         grace_seconds: float = 2.0,
         warning_seconds: float = 10.0,
@@ -69,7 +71,9 @@ class PersonZoneDetector:
         self.focus_interval_sec = focus_interval_sec
         self.focus_ttl_sec = focus_ttl_sec
         self.target_fps = max(0.0, target_fps)
+        self.decode_reduce = 2 if decode_reduce == 2 else 1
         self.ws_legacy_payload = ws_legacy_payload
+        self._prefetch_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="ai-prefetch")
 
         self._stream_manager = nvr_stream_manager
         self._display_pipeline = display_pipeline
@@ -140,6 +144,7 @@ class PersonZoneDetector:
         self._wake_event.set()
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=3.0)
+        self._prefetch_pool.shutdown(wait=False, cancel_futures=True)
         if self._sqlite_store is not None:
             try:
                 snaps = self._rule_engine.export_snapshots()
@@ -366,6 +371,36 @@ class PersonZoneDetector:
             "updated_at": time.time(),
         }
 
+    def _fetch_and_prepare(
+        self,
+        cam: dict[str, Any],
+    ) -> tuple[
+        dict[str, Any],
+        NvrFramePacket | None,
+        tuple[np.ndarray, int, int, float, float, float] | None,
+        float,
+    ]:
+        """Just-In-Time fetch latest frame for one camera, decode & preprocess off the GPU thread."""
+        assert self._stream_manager is not None
+        cam_id = str(cam["id"])
+        pkt = self._stream_manager.latest(cam_id)
+        if pkt is None or pkt.seq == self._last_frame_id.get(cam_id):
+            return cam, None, None, 0.0
+
+        t_dec = time.perf_counter()
+        if pkt.frame is not None:
+            bgr = pkt.frame
+        else:
+            flag = cv2.IMREAD_REDUCED_COLOR_2 if self.decode_reduce == 2 else cv2.IMREAD_COLOR
+            buf = np.frombuffer(pkt.jpeg_bytes, dtype=np.uint8)
+            bgr = cv2.imdecode(buf, flag)
+        if bgr is None:
+            return cam, pkt, None, round((time.perf_counter() - t_dec) * 1000.0, 2)
+
+        prepped = self._detector.preprocess_frame(bgr)
+        prep_ms = round((time.perf_counter() - t_dec) * 1000.0, 2)
+        return cam, pkt, prepped, prep_ms
+
     def _run_stream_cycle(self, all_cameras: list[dict[str, Any]]) -> bool:
         assert self._stream_manager is not None
         self._stream_manager.sync_cameras(all_cameras)
@@ -379,52 +414,52 @@ class PersonZoneDetector:
             # Skip AI on cameras without a zone to save GPU cycles
             target_cams = [c for c in all_cameras if len(c.get("zone") or []) >= 3]
 
-        ready_cams: list[tuple[dict[str, Any], NvrFramePacket]] = []
         idle_cams: list[dict[str, Any]] = []
-
-        for cam in target_cams:
-            cam_id = str(cam["id"])
-            pkt = self._stream_manager.latest(cam_id)
-            if pkt is not None and pkt.seq != self._last_frame_id.get(cam_id):
-                ready_cams.append((cam, pkt))
-            else:
-                idle_cams.append(cam)
-
         changed = False
         now_mono = time.monotonic()
 
-        # Per-camera immediate decode -> YOLO -> Tracker -> immediate WS bbox push (~60ms/cam)
-        for cam, pkt in ready_cams:
+        # Single-pass JIT fetch + 1-cam overlap prefetch:
+        # While GPU runs Cam i, prefetch thread decodes & preprocesses latest frame of Cam i+1.
+        next_fut: Future[Any] | None = None
+        for idx, cam in enumerate(target_cams):
             if self._stop_event.is_set():
                 break
-            cam_id = str(cam["id"])
-            t_dec = time.perf_counter()
-            if pkt.frame is not None:
-                bgr = pkt.frame
+
+            if next_fut is not None:
+                cam_cur, pkt, prepped, prep_ms = next_fut.result()
+                next_fut = None
             else:
-                buf = np.frombuffer(pkt.jpeg_bytes, dtype=np.uint8)
-                bgr = cv2.imdecode(buf, cv2.IMREAD_COLOR)
-            decode_ms = round((time.perf_counter() - t_dec) * 1000.0, 2)
-            if bgr is None:
+                cam_cur, pkt, prepped, prep_ms = self._fetch_and_prepare(cam)
+
+            cam_id = str(cam_cur["id"])
+            if pkt is None:
+                idle_cams.append(cam_cur)
+                continue
+            if prepped is None:
                 with self._lock:
                     self._last_frame_id[cam_id] = pkt.seq
                 continue
 
+            # Overlap: start JIT fetch+decode+preprocess of Cam i+1 while GPU runs Cam i
+            if idx + 1 < len(target_cams) and not self._stop_event.is_set():
+                next_fut = self._prefetch_pool.submit(self._fetch_and_prepare, target_cams[idx + 1])
+
+            blob, orig_w, orig_h, scale, pad_x, pad_y = prepped
             t_inf = time.perf_counter()
-            raw_dets = self._detector.detect(bgr)
+            raw_dets = self._detector.infer_preprocessed(blob, orig_w, orig_h, scale, pad_x, pad_y)
             infer_ms = max(1, round((time.perf_counter() - t_inf) * 1000.0))
 
             t_trk = time.perf_counter()
             tracked = self._tracker.update(cam_id, raw_dets, ts_mono=pkt.ts_mono)
             track_ms = round((time.perf_counter() - t_trk) * 1000.0, 2)
 
-            result = self._evaluate_camera(cam, tracked, inference_ms=infer_ms, updated_at=pkt.ts_wall)
+            result = self._evaluate_camera(cam_cur, tracked, inference_ms=infer_ms, updated_at=pkt.ts_wall)
             e2e_ms = round((time.monotonic() - pkt.ts_mono) * 1000.0)
             with self._lock:
                 self._results[cam_id] = result
                 self._last_frame_id[cam_id] = pkt.seq
                 self._ai_metrics[cam_id] = {
-                    "decode_ms": decode_ms,
+                    "decode_prep_ms": prep_ms,
                     "infer_ms": infer_ms,
                     "track_ms": track_ms,
                     "e2e_ms": e2e_ms,

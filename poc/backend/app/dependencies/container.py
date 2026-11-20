@@ -78,6 +78,7 @@ class ServiceContainer:
             vram_limit_mb=settings.AI_VRAM_LIMIT_MB,
             target_fps=settings.AI_TARGET_FPS,
             snap_min_iou=settings.AI_SNAP_MIN_IOU,
+            decode_reduce=settings.AI_DECODE_REDUCE,
             anchor_mode=settings.AI_ANCHOR_MODE,
             grace_seconds=settings.AI_PRESENCE_GRACE_SECONDS,
             warning_seconds=settings.AI_PRESENCE_WARNING_SECONDS,

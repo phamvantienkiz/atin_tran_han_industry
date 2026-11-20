@@ -55,6 +55,7 @@ class Settings(BaseSettings):
     AI_VRAM_LIMIT_MB: int = 1536
     AI_CONF_THRESHOLD: float = 0.40
     AI_IMGSZ: int = 640
+    AI_DECODE_REDUCE: int = 1  # 1 = full IMREAD_COLOR, 2 = IMREAD_REDUCED_COLOR_2
     AI_SNAP_MIN_IOU: float = 0.25
     AI_TARGET_FPS: float = 0.0  # 0 = run as fast as GPU allows
     AI_ANCHOR_MODE: str = "bottom_center"  # bottom_center | center

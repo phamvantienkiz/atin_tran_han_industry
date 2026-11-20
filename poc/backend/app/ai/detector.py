@@ -56,6 +56,7 @@ class YoloPersonDetector:
 
         self._session: ort.InferenceSession | None = None
         self._input_name: str = "images"
+        self._input_dtype: np.dtype[Any] = np.dtype(np.float32)
         self._dynamic_batch: bool = False
         self.active_provider: str = "uninitialized"
 
@@ -115,6 +116,9 @@ class YoloPersonDetector:
                     raise
             inp = session.get_inputs()[0]
             self._input_name = inp.name
+            self._input_dtype = (
+                np.dtype(np.float16) if "float16" in str(inp.type).lower() else np.dtype(np.float32)
+            )
             dim0 = inp.shape[0] if inp.shape else 1
             self._dynamic_batch = isinstance(dim0, str) or dim0 is None or dim0 != 1
             active_providers = session.get_providers()
@@ -124,13 +128,14 @@ class YoloPersonDetector:
             model_names = meta_map.get("names", "unknown")
 
             # Warmup pass to initialize CUDA context & cuDNN kernels before live stream hits
-            dummy = np.zeros((1, 3, self.imgsz, self.imgsz), dtype=np.float32)
+            dummy = np.zeros((1, 3, self.imgsz, self.imgsz), dtype=self._input_dtype)
             session.run(None, {self._input_name: dummy})
 
             self._session = session
             logger.info(
-                "Loaded YOLO ONNX model=%s classes=%s active_provider=%s dynamic_batch=%s vram_limit_mb=%s",
+                "Loaded YOLO ONNX model=%s dtype=%s classes=%s active_provider=%s dynamic_batch=%s vram_limit_mb=%s",
                 self.model_path.name,
+                self._input_dtype,
                 model_names,
                 self.active_provider,
                 self._dynamic_batch,
@@ -189,6 +194,50 @@ class YoloPersonDetector:
         """Run inference on a single BGR image and return normalized [0..1] detections."""
         return self.detect_batch([frame])[0]
 
+    def preprocess_frame(self, frame: np.ndarray) -> tuple[np.ndarray, int, int, float, float, float]:
+        """Letterbox & normalize a BGR frame into model input tensor (thread-safe for prefetch)."""
+        orig_h, orig_w = frame.shape[:2]
+        blob, scale, pad_x, pad_y = self._preprocess(frame)
+        return blob, orig_w, orig_h, scale, pad_x, pad_y
+
+    def infer_preprocessed(
+        self,
+        blob: np.ndarray,
+        orig_w: int,
+        orig_h: int,
+        scale: float,
+        pad_x: float,
+        pad_y: float,
+    ) -> list[PersonDetection]:
+        """Run ONNX inference on a pre-built input tensor and return normalized [0..1] detections."""
+        session = self.ensure_session()
+        if blob.dtype != self._input_dtype:
+            blob = np.ascontiguousarray(blob.astype(self._input_dtype, copy=False))
+        output = session.run(None, {self._input_name: blob})[0]
+        raw_boxes = self._postprocess(output, orig_w, orig_h, scale, pad_x, pad_y)
+        detections: list[PersonDetection] = []
+        for x1, y1, x2, y2, score in raw_boxes:
+            nx1 = max(0.0, min(1.0, x1 / orig_w))
+            ny1 = max(0.0, min(1.0, y1 / orig_h))
+            nx2 = max(0.0, min(1.0, x2 / orig_w))
+            ny2 = max(0.0, min(1.0, y2 / orig_h))
+            cx = round((nx1 + nx2) / 2.0, 4)
+            cy = round((ny1 + ny2) / 2.0, 4)
+            detections.append(
+                PersonDetection(
+                    x1=round(nx1, 4),
+                    y1=round(ny1, 4),
+                    x2=round(nx2, 4),
+                    y2=round(ny2, 4),
+                    cx=cx,
+                    cy=cy,
+                    foot_x=cx,
+                    foot_y=round(ny2, 4),
+                    conf=round(float(score), 3),
+                )
+            )
+        return detections
+
     def _preprocess(self, frame: np.ndarray) -> tuple[np.ndarray, float, float, float]:
         orig_h, orig_w = frame.shape[:2]
         size = self.imgsz
@@ -205,6 +254,8 @@ class YoloPersonDetector:
 
         rgb = cv2.cvtColor(canvas, cv2.COLOR_BGR2RGB)
         blob = np.transpose(rgb.astype(np.float32) / 255.0, (2, 0, 1))[None, ...]
+        if self._input_dtype != np.float32:
+            blob = blob.astype(self._input_dtype, copy=False)
         return np.ascontiguousarray(blob), scale, float(left), float(top)
 
     def _postprocess(
@@ -216,7 +267,7 @@ class YoloPersonDetector:
         pad_x: float,
         pad_y: float,
     ) -> list[tuple[float, float, float, float, float]]:
-        preds = output[0].T
+        preds = np.asarray(output[0], dtype=np.float32).T
         scores = preds[:, 4]
         mask = scores >= self.conf
         if not np.any(mask):
