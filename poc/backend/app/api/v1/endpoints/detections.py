@@ -38,6 +38,17 @@ def reset_camera_stats(
     return service.reset_stats(cam_id)
 
 
+@router.get("/{cam_id}/events")
+def list_camera_alert_events(
+    cam_id: str,
+    service: Annotated[DetectionService, Depends(get_detection_service)],
+    from_ts: float | None = Query(default=None, alias="from"),
+    to_ts: float | None = Query(default=None, alias="to"),
+    limit: int = Query(default=200, ge=1, le=1000),
+) -> list[dict[str, Any]]:
+    return service.query_alert_events(cam_id, from_ts=from_ts, to_ts=to_ts, limit=limit)
+
+
 async def _handle_detections_ws(
     websocket: WebSocket,
     service: DetectionService,

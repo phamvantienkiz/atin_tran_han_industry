@@ -84,6 +84,39 @@ class ZoneRuleEngine:
         """Reset counters, timers, and rolling timeline for a camera zone."""
         self._states.pop(zone_key, None)
 
+    def restore_snapshots(self, snapshots: dict[str, dict[str, Any]]) -> None:
+        """Restore recent runtime counters and timeline after restart."""
+        for cam_id, snap in snapshots.items():
+            state = self._states.setdefault(cam_id, ZoneState())
+            state.alert_count = int(snap.get("alert_count", 0))
+            state.total_alert_seconds = float(snap.get("total_alert_seconds", 0.0))
+            saved_timeline = snap.get("timeline")
+            if isinstance(saved_timeline, list):
+                state.timeline = [dict(seg) for seg in saved_timeline if isinstance(seg, dict)]
+            # Re-anchor session_started_at in monotonic time using elapsed wall time
+            session_wall = float(snap.get("session_started_at", time.time()))
+            elapsed_wall = max(0.0, time.time() - session_wall)
+            state.session_started_at = time.monotonic() - min(elapsed_wall, float(self.timeline_window_seconds))
+
+    def export_snapshots(self) -> list[dict[str, Any]]:
+        """Export current runtime counters and timelines for SQLite persistence."""
+        now_wall = time.time()
+        now_mono = time.monotonic()
+        out: list[dict[str, Any]] = []
+        for cam_id, state in self._states.items():
+            elapsed = (now_mono - state.session_started_at) if state.session_started_at is not None else 0.0
+            out.append(
+                {
+                    "cam_id": cam_id,
+                    "alert_count": state.alert_count,
+                    "total_alert_seconds": round(state.total_alert_seconds, 2),
+                    "session_started_at": now_wall - max(0.0, elapsed),
+                    "timeline": list(state.timeline),
+                    "saved_at": now_wall,
+                }
+            )
+        return out
+
     def _update_timeline(self, state: ZoneState, wall_now: float, ui_color: str) -> list[dict[str, Any]]:
         window = max(60, int(self.timeline_window_seconds))
         cutoff = wall_now - window

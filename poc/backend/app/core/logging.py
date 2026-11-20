@@ -20,8 +20,8 @@ def setup_logging() -> None:
                 "file": {
                     "class": "logging.handlers.RotatingFileHandler",
                     "filename": str(LOG_DIR / "app.log"),
-                    "maxBytes": 5 * 1024 * 1024,
-                    "backupCount": 3,
+                    "maxBytes": 10 * 1024 * 1024,
+                    "backupCount": 5,
                     "encoding": "utf-8",
                     "formatter": "default",
                 },

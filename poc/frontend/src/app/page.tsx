@@ -9,6 +9,7 @@ import { FocusModal } from '@/components/FocusModal';
 import { Toast } from '@/components/Toast';
 import { Topbar } from '@/components/Topbar';
 import { api } from '@/lib/api';
+import { detectionStore } from '@/lib/detection-store';
 import { detectionsWsClient } from '@/lib/ws-client';
 import type { ActivePage, ActiveRecordJob, Camera, GridLayoutCount } from '@/types';
 
@@ -86,6 +87,9 @@ export default function HomePage() {
       .then((cfg) => {
         if (cfg.nvr_host) setNvrHost(cfg.nvr_host);
         if (cfg.ws_path) wsPath = cfg.ws_path;
+        if (typeof cfg.bbox_stale_seconds === 'number') {
+          detectionStore.setBboxStaleSeconds(cfg.bbox_stale_seconds);
+        }
       })
       .catch(() => {})
       .finally(() => {

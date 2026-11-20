@@ -69,7 +69,7 @@ export function FocusModal({
   if (!cam) return null;
 
   const activeJob = activeJobs.find((j) => j.cam_id === cam.id) || null;
-  const streamSrc = `/api/v1/cameras/${encodeURIComponent(cam.id)}/mjpeg?subtype=${subtype}&t=${streamTick}`;
+  const streamSrc = `/api/v1/cameras/${encodeURIComponent(cam.id)}/mjpeg?subtype=${subtype}&view=focus&t=${streamTick}`;
 
   const handleSwitchSubtype = (nextSub: 0 | 1) => {
     setSubtype(nextSub);

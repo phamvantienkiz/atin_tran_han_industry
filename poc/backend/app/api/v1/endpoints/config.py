@@ -2,9 +2,10 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends
 
-from app.api.deps import get_detection_service
+from app.api.deps import get_detection_service, get_ws_hub
 from app.core.config import settings
 from app.services.detection_service import DetectionService
+from app.services.ws_hub import DetectionWsHub
 
 router = APIRouter(tags=["config"])
 
@@ -25,4 +26,17 @@ def get_config(
         "active_provider": detection_service.active_provider,
         "grace_seconds": settings.AI_PRESENCE_GRACE_SECONDS,
         "warning_seconds": settings.AI_PRESENCE_WARNING_SECONDS,
+        "bbox_stale_seconds": settings.BBOX_STALE_SECONDS,
+        "stream_sync_delay_ms": settings.STREAM_SYNC_DELAY_MS,
+        "ws_legacy_payload": settings.WS_LEGACY_PAYLOAD,
     }
+
+
+@router.get("/metrics")
+def get_metrics(
+    detection_service: Annotated[DetectionService, Depends(get_detection_service)],
+    ws_hub: Annotated[DetectionWsHub, Depends(get_ws_hub)],
+) -> dict[str, Any]:
+    data = detection_service.get_metrics()
+    data["ws_clients"] = ws_hub.client_count
+    return data

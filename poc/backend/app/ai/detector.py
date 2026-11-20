@@ -66,7 +66,7 @@ class YoloPersonDetector:
 
             available = ort.get_available_providers()
             use_cuda = (
-                self.runtime in ("auto", "onnx_cuda")
+                self.runtime in ("auto", "cuda", "onnx_cuda")
                 and "CUDAExecutionProvider" in available
             )
 
@@ -74,7 +74,7 @@ class YoloPersonDetector:
             if use_cuda:
                 cuda_opts = {
                     "device_id": "0",
-                    "arena_extend_strategy": "kSameAsRequested",
+                    "arena_extend_strategy": "kNextPowerOfTwo",
                     "gpu_mem_limit": str(int(self.vram_limit_mb * 1024 * 1024)),
                     "cudnn_conv_algo_search": "HEURISTIC",
                     "do_copy_in_default_stream": "1",

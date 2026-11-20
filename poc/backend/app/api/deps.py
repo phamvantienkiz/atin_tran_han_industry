@@ -2,6 +2,7 @@ from collections.abc import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ai.display_pipeline import DisplayAndSyncPipeline
 from app.ai.nvr_stream import NvrStreamManager
 from app.db.session import async_session_factory
 from app.dependencies.container import get_container
@@ -42,3 +43,7 @@ def get_ws_hub() -> DetectionWsHub:
 
 def get_nvr_stream_manager() -> NvrStreamManager:
     return get_container().nvr_stream_manager
+
+
+def get_display_pipeline() -> DisplayAndSyncPipeline:
+    return get_container().display_pipeline

@@ -1,6 +1,6 @@
 import { api } from '@/lib/api';
 import { detectionStore } from '@/lib/detection-store';
-import type { CameraDetection } from '@/types';
+import type { BboxWsMessage, CameraDetection, HudWsMessage } from '@/types';
 
 export function getDetectionsWsUrl(wsPath = '/api/v1/ws/detections'): string {
   const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -75,11 +75,15 @@ export class DetectionsWsClient {
 
       socket.onmessage = (event) => {
         try {
-          const msg = JSON.parse(event.data as string) as {
-            type?: string;
-            data?: Record<string, CameraDetection>;
-          };
-          if (msg.type === 'detections' && msg.data) {
+          const msg = JSON.parse(event.data as string) as
+            | BboxWsMessage
+            | HudWsMessage
+            | { type?: string; data?: Record<string, CameraDetection> };
+          if (msg.type === 'bbox') {
+            detectionStore.updateBbox(msg as BboxWsMessage);
+          } else if (msg.type === 'hud') {
+            detectionStore.updateHud(msg as HudWsMessage);
+          } else if (msg.type === 'detections' && 'data' in msg && msg.data) {
             detectionStore.updateAll(msg.data);
           }
         } catch {

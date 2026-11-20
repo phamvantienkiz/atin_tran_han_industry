@@ -46,15 +46,17 @@ class Settings(BaseSettings):
     NVR_PORT: int = 80
     NVR_USER: str = ""
     NVR_PASS: str = ""
-    NVR_STREAM_FPS_LIMIT: float = 12.0
+    NVR_STREAM_FPS_LIMIT: float = 0.0
 
     # --- AI Core ---
     AI_ENABLED: bool = True
     AI_RUNTIME: str = "auto"  # auto | onnx_cuda | cpu
-    AI_VRAM_LIMIT_MB: int = 1024
+    AI_EP: str = "auto"  # auto | cuda | cpu (never TensorRT)
+    AI_VRAM_LIMIT_MB: int = 1536
     AI_CONF_THRESHOLD: float = 0.40
     AI_IMGSZ: int = 640
-    AI_TARGET_FPS: float = 12.0
+    AI_SNAP_MIN_IOU: float = 0.25
+    AI_TARGET_FPS: float = 0.0  # 0 = run as fast as GPU allows
     AI_ANCHOR_MODE: str = "bottom_center"  # bottom_center | center
     AI_PRESENCE_GRACE_SECONDS: float = 2.0
     AI_PRESENCE_WARNING_SECONDS: float = 10.0
@@ -65,6 +67,21 @@ class Settings(BaseSettings):
     AI_CONFIRM_SECONDS: float = 2.0
     AI_EVENT_COOLDOWN_SECONDS: float = 60.0
     WS_PUSH_MAX_HZ: float = 15.0
+
+    # --- Display & Time-Aligned Synced Playback ---
+    DISPLAY_GRID_W: int = 960
+    DISPLAY_GRID_Q: int = 80
+    DISPLAY_FOCUS_W: int = 1920
+    DISPLAY_FOCUS_Q: int = 85
+    STREAM_SYNC_DELAY_MS: int = 450
+    STREAM_VALVE_MS: int = 150
+    BBOX_STALE_SECONDS: float = 0.7
+    WS_LEGACY_PAYLOAD: bool = False
+
+    # --- SQLite Persistence (PoC) ---
+    DB_BACKEND: str = "sqlite"  # sqlite | json
+    DB_PATH: str = "../data/tranhan_poc.db"
+    ALERT_EVENT_RETENTION_DAYS: int = 90
 
     # --- Database (Production / Alembic) ---
     DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/tranhan_ai"
@@ -131,6 +148,10 @@ class Settings(BaseSettings):
     @cached_property
     def storages_path(self) -> Path:
         return _resolve_path(self.STORAGES_DIR)
+
+    @cached_property
+    def db_file_path(self) -> Path:
+        return _resolve_path(self.DB_PATH)
 
     @property
     def nvr_configured(self) -> bool:

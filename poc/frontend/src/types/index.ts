@@ -50,6 +50,7 @@ export interface CameraUpdatePayload {
 }
 
 export interface DetectedPerson {
+  id?: number;
   track_id?: number;
   x1: number;
   y1: number;
@@ -61,6 +62,35 @@ export interface DetectedPerson {
   foot_y?: number;
   conf: number;
   in_zone: boolean;
+  predicted?: boolean;
+}
+
+export interface BboxWsMessage {
+  type: 'bbox';
+  cam_id: string;
+  frame_id?: number;
+  ts_capture?: number;
+  delay_ms?: number;
+  inference_ms?: number;
+  in_zone_count?: number;
+  persons: DetectedPerson[];
+}
+
+export interface HudWsMessage {
+  type: 'hud';
+  cam_id: string;
+  has_zone: boolean;
+  status: PresenceStatus;
+  ui_color: UiColor;
+  status_label: string;
+  sub_label: string;
+  polygon_label: string;
+  alert_count: number;
+  total_alert_seconds: number;
+  session_duration_seconds: number;
+  in_zone_count?: number;
+  active_provider?: string;
+  timeline?: TimelineSegment[];
 }
 
 export interface TimelineSegment {
@@ -89,6 +119,7 @@ export interface CameraDetection {
   session_duration_seconds: number;
   timeline: TimelineSegment[];
   inference_ms?: number;
+  delay_ms?: number;
   active_provider?: string;
   updated_at: number;
   _client_ts?: number;
@@ -117,6 +148,9 @@ export interface AppConfig {
   active_provider?: string;
   grace_seconds?: number;
   warning_seconds?: number;
+  bbox_stale_seconds?: number;
+  stream_sync_delay_ms?: number;
+  ws_legacy_payload?: boolean;
 }
 
 export interface ActiveRecordJob {

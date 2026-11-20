@@ -125,7 +125,7 @@ export function ZoneHudOverlay({
       }
     };
 
-    const unsub = detectionStore.subscribeCamera(cam.id, apply);
+    const unsub = detectionStore.subscribeHud(cam.id, apply);
     return () => {
       unsub();
     };
@@ -142,7 +142,7 @@ export function ZoneHudOverlay({
 
   return (
     <div
-      className={`absolute top-2.5 left-2.5 z-10 pointer-events-none select-none bg-surface-hud backdrop-blur-[3px] rounded-md border border-white/15 shadow-md overflow-hidden text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.85)] transition-colors duration-200 ${
+      className={`absolute top-2.5 left-2.5 z-10 pointer-events-none select-none bg-surface-hud rounded-md border border-white/15 shadow-md overflow-hidden text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.85)] transition-colors duration-200 ${
         compact ? 'max-w-[214px] pl-2.5 pr-2 py-1.5' : 'max-w-[262px] pl-3 pr-2.5 py-2'
       }`}
     >

@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-import cv2
 import httpx
 import numpy as np
 
@@ -25,12 +25,12 @@ _SNAPSHOT_POLL_INTERVAL_SEC = 0.30
 
 @dataclass(frozen=True)
 class NvrFramePacket:
-    """Latest frame captured from an NVR channel, shared by AI Core and MJPEG HTTP endpoints."""
+    """Latest raw JPEG frame captured from an NVR channel, identified by monotonic seq/frame_id."""
 
     cam_id: str
     channel: int
     subtype: int
-    frame: np.ndarray
+    frame: np.ndarray | None
     jpeg_bytes: bytes
     seq: int
     ts_mono: float
@@ -72,7 +72,8 @@ class NvrChannelReader:
         nvr_base_url: str,
         nvr_user: str,
         nvr_pass: str,
-        fps_limit: float = 12.0,
+        fps_limit: float = 0.0,
+        on_frame: Callable[[NvrFramePacket], None] | None = None,
     ) -> None:
         self.cam_id = cam_id
         self.channel = channel
@@ -80,12 +81,13 @@ class NvrChannelReader:
         self._nvr_base_url = nvr_base_url.rstrip("/")
         self._nvr_user = nvr_user
         self._nvr_pass = nvr_pass
-        self._min_decode_interval = 1.0 / fps_limit if fps_limit > 0 else 0.0
+        self._min_interval = 1.0 / fps_limit if fps_limit > 0 else 0.0
+        self._on_frame = on_frame
 
         self._lock = threading.Lock()
         self._latest: NvrFramePacket | None = None
         self._seq: int = 0
-        self._last_decode_mono: float = 0.0
+        self._last_store_mono: float = 0.0
 
         self._stop_event = threading.Event()
         self._client_lock = threading.Lock()
@@ -123,51 +125,33 @@ class NvrChannelReader:
     def is_alive(self) -> bool:
         return bool(self._thread and self._thread.is_alive())
 
-    def _store_jpeg(self, jpeg_bytes: bytes, force_decode: bool = False) -> bool:
+    def _store_jpeg(self, jpeg_bytes: bytes, force: bool = False) -> bool:
+        if not jpeg_bytes:
+            return False
         now_mono = time.monotonic()
-        with self._lock:
-            existing = self._latest
-
-        should_decode = (
-            force_decode
-            or existing is None
-            or self._min_decode_interval <= 0.0
-            or (now_mono - self._last_decode_mono) >= self._min_decode_interval
-        )
-
-        if should_decode:
-            buf = np.frombuffer(jpeg_bytes, dtype=np.uint8)
-            frame = cv2.imdecode(buf, cv2.IMREAD_COLOR)
-            if frame is None:
-                return False
-            self._last_decode_mono = now_mono
-            with self._lock:
-                self._seq += 1
-                self._latest = NvrFramePacket(
-                    cam_id=self.cam_id,
-                    channel=self.channel,
-                    subtype=self.subtype,
-                    frame=frame,
-                    jpeg_bytes=jpeg_bytes,
-                    seq=self._seq,
-                    ts_mono=now_mono,
-                    ts_wall=time.time(),
-                )
+        if not force and self._min_interval > 0.0 and (now_mono - self._last_store_mono) < self._min_interval:
             return True
 
-        # Keep JPEG fresh for MJPEG web clients without bumping AI decode seq
+        self._last_store_mono = now_mono
         with self._lock:
-            if self._latest is not None:
-                self._latest = NvrFramePacket(
-                    cam_id=self.cam_id,
-                    channel=self.channel,
-                    subtype=self.subtype,
-                    frame=self._latest.frame,
-                    jpeg_bytes=jpeg_bytes,
-                    seq=self._seq,
-                    ts_mono=now_mono,
-                    ts_wall=time.time(),
-                )
+            self._seq += 1
+            pkt = NvrFramePacket(
+                cam_id=self.cam_id,
+                channel=self.channel,
+                subtype=self.subtype,
+                frame=None,
+                jpeg_bytes=jpeg_bytes,
+                seq=self._seq,
+                ts_mono=now_mono,
+                ts_wall=time.time(),
+            )
+            self._latest = pkt
+
+        if self._on_frame is not None:
+            try:
+                self._on_frame(pkt)
+            except Exception as exc:  # noqa: BLE001
+                logger.debug("on_frame callback error cam=%s: %s", self.cam_id, exc)
         return True
 
     def _set_active_client(self, client: httpx.Client | None) -> None:
@@ -195,7 +179,6 @@ class NvrChannelReader:
                         buffer.extend(chunk)
                         jpegs = extract_jpeg_frames(buffer)
                         if jpegs:
-                            # Keep only the newest JPEG if multiple arrived in one chunk
                             if self._store_jpeg(jpegs[-1]):
                                 last_frame_mono = time.monotonic()
                         elif (time.monotonic() - last_frame_mono) > _MJPEG_STALL_TIMEOUT_SEC:
@@ -216,7 +199,7 @@ class NvrChannelReader:
                     try:
                         resp = client.get(url)
                         if resp.status_code == 200 and resp.content:
-                            self._store_jpeg(resp.content, force_decode=True)
+                            self._store_jpeg(resp.content, force=True)
                     except httpx.HTTPError as exc:
                         logger.debug("Snapshot fallback failed cam=%s: %s", self.cam_id, exc)
                     elapsed = time.monotonic() - t0
@@ -261,16 +244,24 @@ class NvrStreamManager:
         nvr_user: str,
         nvr_pass: str,
         nvr_configured: bool,
-        fps_limit: float = 12.0,
+        fps_limit: float = 0.0,
+        on_frame: Callable[[NvrFramePacket], None] | None = None,
     ) -> None:
         self._nvr_base_url = nvr_base_url
         self._nvr_user = nvr_user
         self._nvr_pass = nvr_pass
         self._nvr_configured = nvr_configured
         self._fps_limit = fps_limit
+        self._on_frame = on_frame
         self._lock = threading.Lock()
         self._readers: dict[str, NvrChannelReader] = {}
         self._stopped = False
+
+    def set_on_frame(self, callback: Callable[[NvrFramePacket], None] | None) -> None:
+        with self._lock:
+            self._on_frame = callback
+            for reader in self._readers.values():
+                reader._on_frame = callback
 
     def sync_cameras(self, cameras: list[dict[str, Any]]) -> None:
         """Start, restart (if channel/subtype changed), or stop readers to match camera list."""
@@ -285,7 +276,7 @@ class NvrStreamManager:
                     continue
                 cam_id = str(cam["id"])
                 channel = int(cam["channel"])
-                subtype = int(cam.get("subtype", 1))
+                subtype = int(cam.get("subtype", 0))
                 desired[cam_id] = (channel, subtype)
 
             to_stop: list[NvrChannelReader] = []
@@ -306,6 +297,7 @@ class NvrStreamManager:
                         nvr_user=self._nvr_user,
                         nvr_pass=self._nvr_pass,
                         fps_limit=self._fps_limit,
+                        on_frame=self._on_frame,
                     )
                     reader.start()
                     self._readers[cam_id] = reader

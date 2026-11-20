@@ -5,15 +5,22 @@ from __future__ import annotations
 from typing import Any
 
 from app.ai.worker import PersonZoneDetector
+from app.db.sqlite_store import SqliteStore
 from app.services.camera_service import CameraService
 
 
 class DetectionService:
-    """Exposes live AI detections, focus control, and stats reset without HTTP coupling."""
+    """Exposes live AI detections, focus control, stats reset, metrics, and alert history."""
 
-    def __init__(self, detector: PersonZoneDetector, camera_service: CameraService) -> None:
+    def __init__(
+        self,
+        detector: PersonZoneDetector,
+        camera_service: CameraService,
+        sqlite_store: SqliteStore | None = None,
+    ) -> None:
         self._detector = detector
         self._camera_service = camera_service
+        self._sqlite_store = sqlite_store
 
     @property
     def active_provider(self) -> str:
@@ -39,3 +46,18 @@ class DetectionService:
     def reset_stats(self, cam_id: str) -> dict[str, Any]:
         self._camera_service.get_camera(cam_id)
         return self._detector.reset_stats(cam_id)
+
+    def get_metrics(self) -> dict[str, Any]:
+        return self._detector.get_metrics()
+
+    def query_alert_events(
+        self,
+        cam_id: str,
+        from_ts: float | None = None,
+        to_ts: float | None = None,
+        limit: int = 200,
+    ) -> list[dict[str, Any]]:
+        self._camera_service.get_camera(cam_id)
+        if self._sqlite_store is None:
+            return []
+        return self._sqlite_store.query_alert_events(cam_id, from_ts=from_ts, to_ts=to_ts, limit=limit)

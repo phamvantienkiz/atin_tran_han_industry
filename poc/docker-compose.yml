@@ -19,7 +19,10 @@ services:
       MODEL_PATH: /app/models/yolo26s.onnx
       STORAGES_DIR: /app/storages
       AI_RUNTIME: auto
-      AI_VRAM_LIMIT_MB: "1024"
+      AI_EP: auto
+      AI_VRAM_LIMIT_MB: "1536"
+      DB_BACKEND: sqlite
+      DB_PATH: /app/data/tranhan_poc.db
     volumes:
       - ./data:/app/data
       - ./models:/app/models:ro

@@ -18,8 +18,6 @@ const COLOR_MAP: Record<UiColor, { stroke: string; fill: string }> = {
   idle: { stroke: '#0284C7', fill: 'rgba(2, 132, 199, 0.14)' },
 };
 
-const BBOX_STALE_SECONDS = 3.0;
-
 function drawRoundedRect(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -62,6 +60,7 @@ export function CameraOverlayCanvas({
 
   const draw = useCallback(() => {
     rafIdRef.current = null;
+    if (typeof document !== 'undefined' && document.hidden) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -71,7 +70,7 @@ export function CameraOverlayCanvas({
     const h = canvas.clientHeight;
     if (!w || !h) return;
 
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
     const targetW = Math.round(w * dpr);
     const targetH = Math.round(h * dpr);
     if (canvas.width !== targetW || canvas.height !== targetH) {
@@ -203,7 +202,7 @@ export function CameraOverlayCanvas({
     if (!det || !det.persons || det.persons.length === 0) return;
     const refTs = det._client_ts || det.updated_at || 0;
     const ageSec = Date.now() / 1000 - refTs;
-    if (ageSec > BBOX_STALE_SECONDS) return;
+    if (ageSec > detectionStore.getBboxStaleSeconds()) return;
 
     // 4. Draw person BBoxes (in-zone prominent green vs outside-zone dimmed slate)
     det.persons.forEach((p, idx) => {
@@ -216,6 +215,10 @@ export function CameraOverlayCanvas({
       const trackLabelId = p.track_id ?? idx + 1;
 
       ctx.save();
+      if (p.predicted) {
+        ctx.globalAlpha = 0.65;
+        ctx.setLineDash([4, 3]);
+      }
       if (p.in_zone) {
         ctx.strokeStyle = '#22C55E';
         ctx.lineWidth = 2;
@@ -283,22 +286,29 @@ export function CameraOverlayCanvas({
 
   // Subscribe to external DetectionStore (0 React re-renders!)
   useEffect(() => {
-    const unsub = detectionStore.subscribeCamera(cam.id, (det) => {
+    const onStore = (det: CameraDetection | null) => {
       latestDetRef.current = det;
       scheduleDraw();
-    });
+    };
+    const unsubBbox = detectionStore.subscribeBbox(cam.id, onStore);
+    const unsubHud = detectionStore.subscribeHud(cam.id, onStore);
 
     // Periodic anti-ghosting sweep so stale BBoxes disappear even if stream stops sending
     const ghostTimer = setInterval(() => {
       const det = latestDetRef.current;
       const refTs = det ? det._client_ts || det.updated_at || 0 : 0;
-      if (det && det.persons.length > 0 && Date.now() / 1000 - refTs > BBOX_STALE_SECONDS) {
+      if (
+        det &&
+        det.persons.length > 0 &&
+        Date.now() / 1000 - refTs > detectionStore.getBboxStaleSeconds()
+      ) {
         scheduleDraw();
       }
-    }, 1000);
+    }, 350);
 
     return () => {
-      unsub();
+      unsubBbox();
+      unsubHud();
       clearInterval(ghostTimer);
       if (rafIdRef.current !== null) {
         window.cancelAnimationFrame(rafIdRef.current);

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Download,
   Loader2,
@@ -12,6 +12,7 @@ import {
   VideoOff,
 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { detectionStore } from '@/lib/detection-store';
 import { CameraOverlayCanvas } from '@/components/CameraOverlayCanvas';
 import { ZoneHudOverlay } from '@/components/ZoneHudOverlay';
 import type { Camera, ZonePoint } from '@/types';
@@ -43,6 +44,8 @@ export function CameraCard({
   const [streamTick, setStreamTick] = useState<number>(() => Date.now());
   const [latencyMs, setLatencyMs] = useState<number | null>(null);
   const [isAlert, setIsAlert] = useState(false);
+  const [inViewport, setInViewport] = useState(true);
+  const [tabHidden, setTabHidden] = useState(false);
 
   // Zone Editor state
   const [editingZone, setEditingZone] = useState(false);
@@ -50,31 +53,53 @@ export function CameraCard({
   const [zoneBgUrl, setZoneBgUrl] = useState<string>('');
   const [savingZone, setSavingZone] = useState(false);
   const retryCountRef = useRef(0);
+  const cardRef = useRef<HTMLElement | null>(null);
 
-  const probeLatency = useCallback(async () => {
-    try {
-      const res = await api.probeCamera(cam.id);
-      setLatencyMs(res.latency_ms);
-    } catch {
-      // ignore probe errors
-    }
-  }, [cam.id]);
-
-  // Refresh stream & probe when refreshNonce changes
+  // Refresh stream when refreshNonce changes
   useEffect(() => {
     retryCountRef.current = 0;
     setStreamHealth('connecting');
     setStreamTick(Date.now());
-    void probeLatency();
-  }, [refreshNonce, cam.mode, cam.subtype, cam.channel, probeLatency]);
+  }, [refreshNonce, cam.mode, cam.subtype, cam.channel]);
 
-  // Periodic latency probe every 30s
+  // Pause stream when tab is hidden or card is scrolled out of viewport
   useEffect(() => {
-    const id = setInterval(() => {
-      void probeLatency();
-    }, 30000);
-    return () => clearInterval(id);
-  }, [probeLatency]);
+    if (typeof document !== 'undefined') {
+      setTabHidden(document.hidden);
+      const onVis = () => setTabHidden(document.hidden);
+      document.addEventListener('visibilitychange', onVis);
+      const el = cardRef.current;
+      let io: IntersectionObserver | null = null;
+      if (el && typeof IntersectionObserver !== 'undefined') {
+        io = new IntersectionObserver(
+          (entries) => {
+            if (entries[0]) setInViewport(entries[0].isIntersecting);
+          },
+          { threshold: 0.05 },
+        );
+        io.observe(el);
+      }
+      return () => {
+        document.removeEventListener('visibilitychange', onVis);
+        io?.disconnect();
+      };
+    }
+    return undefined;
+  }, []);
+
+  // Read inference/delay latency from bbox store (replaces 30s probeCamera polling)
+  useEffect(() => {
+    let lastUpdated = 0;
+    const unsub = detectionStore.subscribeBbox(cam.id, (det) => {
+      if (!det) return;
+      const now = Date.now();
+      if (now - lastUpdated < 1000) return;
+      lastUpdated = now;
+      const ms = det.delay_ms ?? det.inference_ms ?? null;
+      if (ms !== null) setLatencyMs(ms);
+    });
+    return () => unsub();
+  }, [cam.id]);
 
   // Snapshot polling mode when cam.mode === 'snapshot'
   useEffect(() => {
@@ -150,11 +175,10 @@ export function CameraCard({
     retryCountRef.current = 0;
     setStreamHealth('connecting');
     setStreamTick(Date.now());
-    void probeLatency();
   };
 
   const handleStreamError = () => {
-    if (streamPaused || editingZone) return;
+    if (streamPaused || editingZone || !inViewport || tabHidden) return;
     if (retryCountRef.current < 2) {
       retryCountRef.current += 1;
       setTimeout(() => {
@@ -166,11 +190,11 @@ export function CameraCard({
   };
 
   const streamUrl =
-    streamPaused || editingZone
+    streamPaused || editingZone || !inViewport || tabHidden
       ? ''
       : cam.mode === 'snapshot'
         ? `/api/v1/cameras/${encodeURIComponent(cam.id)}/snapshot.jpg?t=${streamTick}`
-        : `/api/v1/cameras/${encodeURIComponent(cam.id)}/mjpeg?subtype=${cam.subtype}&t=${streamTick}`;
+        : `/api/v1/cameras/${encodeURIComponent(cam.id)}/mjpeg?subtype=${cam.subtype}&view=grid&t=${streamTick}`;
 
   const streamModeLabel =
     cam.mode === 'snapshot'
@@ -179,6 +203,7 @@ export function CameraCard({
 
   return (
     <article
+      ref={cardRef}
       className={`bg-surface-card border rounded-card p-4 md:p-5 shadow-card transition-all duration-200 hover:shadow-card-hover flex flex-col gap-3.5 ${
         isAlert && !editingZone ? 'border-status-alert/60' : 'border-line'
       }`}
@@ -342,7 +367,7 @@ export function CameraCard({
 
         {/* Layer 5: Top-right Stream Health Badge */}
         {!editingZone && (
-          <div className="absolute top-3 right-3 z-10 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-pill bg-slate-900/75 backdrop-blur-sm border border-white/10 text-[11px] font-medium text-white pointer-events-none">
+          <div className="absolute top-3 right-3 z-10 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-pill bg-slate-900/75 border border-white/10 text-[11px] font-medium text-white pointer-events-none">
             <span
               className={`w-2 h-2 rounded-full ${
                 streamHealth === 'live'

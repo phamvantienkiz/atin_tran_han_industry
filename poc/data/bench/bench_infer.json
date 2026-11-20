@@ -1,0 +1,137 @@
+{
+  "timestamp": "2026-11-20T01:43:52.475738+00:00",
+  "providers": [
+    "TensorrtExecutionProvider",
+    "CUDAExecutionProvider",
+    "CPUExecutionProvider"
+  ],
+  "vram_limit_mb": 1536,
+  "vram_before": {
+    "used_mb": 1421,
+    "total_mb": 4094
+  },
+  "results": [
+    {
+      "model_name": "yolo26s.onnx",
+      "strategy": "S1",
+      "algo_search": "HEURISTIC",
+      "n_cams": 1,
+      "active_provider": "CUDAExecutionProvider",
+      "group_p50_ms": 67.19,
+      "group_p95_ms": 74.21,
+      "per_cam_p50_ms": 67.19,
+      "max_ai_fps_per_cam": 14.9,
+      "vram_used_mb": 1622,
+      "error": null
+    },
+    {
+      "model_name": "yolo26s.onnx",
+      "strategy": "S1",
+      "algo_search": "HEURISTIC",
+      "n_cams": 4,
+      "active_provider": "CUDAExecutionProvider",
+      "group_p50_ms": 255.11,
+      "group_p95_ms": 274.63,
+      "per_cam_p50_ms": 63.78,
+      "max_ai_fps_per_cam": 3.9,
+      "vram_used_mb": 1622,
+      "error": null
+    },
+    {
+      "model_name": "yolo26s.onnx",
+      "strategy": "S2",
+      "algo_search": "HEURISTIC",
+      "n_cams": 4,
+      "active_provider": "CUDAExecutionProvider",
+      "group_p50_ms": 295.63,
+      "group_p95_ms": 324.26,
+      "per_cam_p50_ms": 73.91,
+      "max_ai_fps_per_cam": 3.4,
+      "vram_used_mb": 2584,
+      "error": null
+    },
+    {
+      "model_name": "yolo26s.onnx",
+      "strategy": "S3",
+      "algo_search": "HEURISTIC",
+      "n_cams": 4,
+      "active_provider": "CUDAExecutionProvider",
+      "group_p50_ms": 212.38,
+      "group_p95_ms": 232.74,
+      "per_cam_p50_ms": 53.09,
+      "max_ai_fps_per_cam": 4.7,
+      "vram_used_mb": 2072,
+      "error": null
+    },
+    {
+      "model_name": "yolo26s.onnx",
+      "strategy": "S1",
+      "algo_search": "EXHAUSTIVE",
+      "n_cams": 1,
+      "active_provider": "CUDAExecutionProvider",
+      "group_p50_ms": 66.05,
+      "group_p95_ms": 71.09,
+      "per_cam_p50_ms": 66.05,
+      "max_ai_fps_per_cam": 15.1,
+      "vram_used_mb": 1638,
+      "error": null
+    },
+    {
+      "model_name": "yolo26s.onnx",
+      "strategy": "S1",
+      "algo_search": "EXHAUSTIVE",
+      "n_cams": 4,
+      "active_provider": "CUDAExecutionProvider",
+      "group_p50_ms": 247.17,
+      "group_p95_ms": 267.9,
+      "per_cam_p50_ms": 61.79,
+      "max_ai_fps_per_cam": 4.0,
+      "vram_used_mb": 1638,
+      "error": null
+    },
+    {
+      "model_name": "yolo26s.onnx",
+      "strategy": "S2",
+      "algo_search": "EXHAUSTIVE",
+      "n_cams": 4,
+      "active_provider": "CUDAExecutionProvider",
+      "group_p50_ms": 220.21,
+      "group_p95_ms": 239.74,
+      "per_cam_p50_ms": 55.05,
+      "max_ai_fps_per_cam": 4.5,
+      "vram_used_mb": 2584,
+      "error": null
+    },
+    {
+      "model_name": "yolo26s.onnx",
+      "strategy": "S3",
+      "algo_search": "EXHAUSTIVE",
+      "n_cams": 4,
+      "active_provider": "CUDAExecutionProvider",
+      "group_p50_ms": 212.73,
+      "group_p95_ms": 238.57,
+      "per_cam_p50_ms": 53.18,
+      "max_ai_fps_per_cam": 4.7,
+      "vram_used_mb": 2068,
+      "error": null
+    }
+  ],
+  "person_counts": [
+    {
+      "image": "ch16/ch16_sub0_00.jpg",
+      "persons": 15
+    },
+    {
+      "image": "ch17/ch17_sub0_00.jpg",
+      "persons": 15
+    },
+    {
+      "image": "ch18/ch18_sub0_00.jpg",
+      "persons": 6
+    },
+    {
+      "image": "ch21/ch21_sub0_00.jpg",
+      "persons": 3
+    }
+  ]
+}
