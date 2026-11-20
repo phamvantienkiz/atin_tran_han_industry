@@ -1,15 +1,42 @@
-# Exclude local virtualenvs, node_modules, caches, and runtime data from Docker build context
+# Git
+.git
+.gitignore
+
+# Python caches & local virtualenvs
 backend/.venv
 backend/logs
 backend/.pytest_cache
+backend/.mypy_cache
 backend/.ruff_cache
 backend/*.egg-info
+backend/tests
+**/__pycache__
+**/*.py[cod]
+
+# Environment & secrets (injected at runtime via docker-compose env_file)
+.env
+.env.*
+**/.env
+**/.env.*
+!**/.env.example
+
+# Logs
+*.log
+**/*.log
+app_log_tail.txt
+
+# Runtime data & artifacts (mounted as volumes at runtime)
+data/
+models/
+storages/
+report/
+docs/
+
+# Frontend build & local deps
 frontend/node_modules
 frontend/.next
 frontend/out
-models
-storages
-report
-docs
-**/__pycache__
-**/*.pyc
+
+# OS
+.DS_Store
+Thumbs.db
