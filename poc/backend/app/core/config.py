@@ -46,6 +46,9 @@ class Settings(BaseSettings):
     NVR_PORT: int = 80
     NVR_USER: str = ""
     NVR_PASS: str = ""
+    NVR_INGEST_MODE: str = "rtsp_http"  # rtsp_http | rtsp_tcp | mjpeg
+    NVR_RTSP_PORT: int = 0  # 0 => reuse NVR_PORT (port 80 for rtsp_http)
+    NVR_RTSP_SUBTYPE: int = 0  # 0 => main-stream (H.264/H.265 1080p)
     NVR_STREAM_FPS_LIMIT: float = 12.0
 
     # --- AI Core ---
@@ -55,7 +58,7 @@ class Settings(BaseSettings):
     AI_CONF_THRESHOLD: float = 0.40
     AI_IMGSZ: int = 640
     AI_TARGET_FPS: float = 12.0
-    AI_ANCHOR_MODE: str = "bottom_center"  # bottom_center | center
+    AI_ANCHOR_MODE: str = "center"  # center | bottom_center
     AI_PRESENCE_GRACE_SECONDS: float = 2.0
     AI_PRESENCE_WARNING_SECONDS: float = 10.0
     AI_TIMELINE_WINDOW_SECONDS: int = 1800

@@ -44,7 +44,7 @@ class PersonZoneDetector:
         runtime: str = "auto",
         vram_limit_mb: int = 1024,
         target_fps: float = 12.0,
-        anchor_mode: str = "bottom_center",
+        anchor_mode: str = "center",
         grace_seconds: float = 2.0,
         warning_seconds: float = 10.0,
         timeline_window_seconds: int = 1800,

@@ -68,7 +68,7 @@ class ZoneRuleEngine:
         grace_seconds: float = 2.0,
         warning_seconds: float = 10.0,
         timeline_window_seconds: int = 1800,
-        anchor_mode: str = "bottom_center",
+        anchor_mode: str = "center",
         default_feature_type: str = "zone_intrusion",
     ) -> None:
         self.confirm_seconds = confirm_seconds

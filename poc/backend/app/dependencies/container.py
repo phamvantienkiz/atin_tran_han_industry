@@ -26,6 +26,9 @@ class ServiceContainer:
             nvr_pass=settings.NVR_PASS,
             nvr_configured=settings.nvr_configured,
             fps_limit=settings.NVR_STREAM_FPS_LIMIT,
+            ingest_mode=settings.NVR_INGEST_MODE,
+            rtsp_port=settings.NVR_RTSP_PORT or settings.NVR_PORT,
+            rtsp_subtype=settings.NVR_RTSP_SUBTYPE,
         )
         self.camera_service = CameraService(
             repo=self.camera_repo,
