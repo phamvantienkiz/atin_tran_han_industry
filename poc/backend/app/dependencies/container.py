@@ -51,7 +51,6 @@ class ServiceContainer:
             nvr_pass=settings.NVR_PASS,
             nvr_configured=settings.nvr_configured,
             fps_limit=settings.NVR_STREAM_FPS_LIMIT,
-            on_frame=self.display_pipeline.submit_raw_packet,
         )
         self.camera_service = CameraService(
             repo=self.camera_repo,
@@ -84,13 +83,14 @@ class ServiceContainer:
             warning_seconds=settings.AI_PRESENCE_WARNING_SECONDS,
             timeline_window_seconds=settings.AI_TIMELINE_WINDOW_SECONDS,
             nvr_stream_manager=self.nvr_stream_manager,
-            display_pipeline=self.display_pipeline,
+            display_pipeline=None,
             sqlite_store=self.sqlite_store,
             ws_legacy_payload=settings.WS_LEGACY_PAYLOAD,
             on_update=self.ws_hub.publish_from_thread,
             on_bbox=self.ws_hub.publish_bbox_from_thread,
             on_hud=self.ws_hub.publish_hud_from_thread,
         )
+        self.nvr_stream_manager.set_on_frame(lambda _pkt: self.detector.notify_new_frame())
         self.detection_service = DetectionService(
             detector=self.detector,
             camera_service=self.camera_service,

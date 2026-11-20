@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import threading
 import time
 from collections.abc import Callable
@@ -256,12 +257,49 @@ class NvrStreamManager:
         self._lock = threading.Lock()
         self._readers: dict[str, NvrChannelReader] = {}
         self._stopped = False
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._waiters: dict[str, set[asyncio.Event]] = {}
+
+    def bind_loop(self, loop: asyncio.AbstractEventLoop) -> None:
+        with self._lock:
+            self._loop = loop
+
+    def register_waiter(self, cam_id: str) -> asyncio.Event:
+        ev = asyncio.Event()
+        with self._lock:
+            self._waiters.setdefault(cam_id, set()).add(ev)
+        return ev
+
+    def unregister_waiter(self, cam_id: str, ev: asyncio.Event) -> None:
+        with self._lock:
+            waiters = self._waiters.get(cam_id)
+            if waiters is not None:
+                waiters.discard(ev)
+                if not waiters:
+                    self._waiters.pop(cam_id, None)
+
+    def _handle_reader_frame(self, pkt: NvrFramePacket) -> None:
+        with self._lock:
+            loop = self._loop
+            waiters = list(self._waiters.get(pkt.cam_id, ()))
+            cb = self._on_frame
+
+        if loop is not None and not loop.is_closed() and waiters:
+            for ev in waiters:
+                try:
+                    loop.call_soon_threadsafe(ev.set)
+                except RuntimeError:
+                    pass
+
+        if cb is not None:
+            try:
+                cb(pkt)
+            except Exception as exc:  # noqa: BLE001
+                logger.debug("on_frame callback error cam=%s: %s", pkt.cam_id, exc)
 
     def set_on_frame(self, callback: Callable[[NvrFramePacket], None] | None) -> None:
         with self._lock:
             self._on_frame = callback
-            for reader in self._readers.values():
-                reader._on_frame = callback
 
     def sync_cameras(self, cameras: list[dict[str, Any]]) -> None:
         """Start, restart (if channel/subtype changed), or stop readers to match camera list."""
@@ -297,7 +335,7 @@ class NvrStreamManager:
                         nvr_user=self._nvr_user,
                         nvr_pass=self._nvr_pass,
                         fps_limit=self._fps_limit,
-                        on_frame=self._on_frame,
+                        on_frame=self._handle_reader_frame,
                     )
                     reader.start()
                     self._readers[cam_id] = reader

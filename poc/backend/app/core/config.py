@@ -73,9 +73,9 @@ class Settings(BaseSettings):
     DISPLAY_GRID_Q: int = 80
     DISPLAY_FOCUS_W: int = 1920
     DISPLAY_FOCUS_Q: int = 85
-    STREAM_SYNC_DELAY_MS: int = 450
+    STREAM_SYNC_DELAY_MS: int = 0
     STREAM_VALVE_MS: int = 150
-    BBOX_STALE_SECONDS: float = 0.7
+    BBOX_STALE_SECONDS: float = 1.8
     WS_LEGACY_PAYLOAD: bool = False
 
     # --- SQLite Persistence (PoC) ---

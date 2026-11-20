@@ -13,8 +13,8 @@ import httpx
 import numpy as np
 
 from app.ai.detector import YoloPersonDetector
-from app.ai.display_pipeline import DecodedFrame, DisplayAndSyncPipeline
-from app.ai.nvr_stream import NvrStreamManager
+from app.ai.display_pipeline import DisplayAndSyncPipeline
+from app.ai.nvr_stream import NvrFramePacket, NvrStreamManager
 from app.ai.rule_engine import ZoneEvaluation, ZoneRuleEngine
 from app.ai.tracker import CameraTracker, TrackedPerson
 from app.core.logging import get_logger
@@ -154,6 +154,10 @@ class PersonZoneDetector:
             self._focus_updated_at = time.monotonic() if cam_id else 0.0
         if changed:
             self._wake_event.set()
+
+    def notify_new_frame(self) -> None:
+        """Wake AI worker when a new NVR frame arrives."""
+        self._wake_event.set()
 
     def reset_stats(self, cam_id: str) -> dict[str, Any]:
         """Reset rule engine counters, timeline, and tracker state for one camera."""
@@ -375,84 +379,73 @@ class PersonZoneDetector:
             # Skip AI on cameras without a zone to save GPU cycles
             target_cams = [c for c in all_cameras if len(c.get("zone") or []) >= 3]
 
-        ready_cams: list[dict[str, Any]] = []
-        ready_frames: list[DecodedFrame] = []
+        ready_cams: list[tuple[dict[str, Any], NvrFramePacket]] = []
         idle_cams: list[dict[str, Any]] = []
 
         for cam in target_cams:
             cam_id = str(cam["id"])
-            df: DecodedFrame | None = None
-            if self._display_pipeline is not None:
-                df = self._display_pipeline.latest_decoded(cam_id)
-            else:
-                pkt = self._stream_manager.latest(cam_id)
-                if pkt is not None and pkt.frame is not None:
-                    df = DecodedFrame(
-                        cam_id=cam_id,
-                        frame_id=pkt.seq,
-                        ts_mono=pkt.ts_mono,
-                        ts_wall=pkt.ts_wall,
-                        bgr=pkt.frame,
-                        decode_ms=0.0,
-                    )
-
-            if df is not None and df.frame_id != self._last_frame_id.get(cam_id):
-                ready_cams.append(cam)
-                ready_frames.append(df)
+            pkt = self._stream_manager.latest(cam_id)
+            if pkt is not None and pkt.seq != self._last_frame_id.get(cam_id):
+                ready_cams.append((cam, pkt))
             else:
                 idle_cams.append(cam)
 
         changed = False
         now_mono = time.monotonic()
 
-        if ready_cams:
-            t0 = time.perf_counter()
-            batch_dets = self._detector.detect_batch([df.bgr for df in ready_frames])
-            total_ms = (time.perf_counter() - t0) * 1000.0
-            per_cam_ms = max(1, round(total_ms / len(ready_cams)))
-
-            for cam, df, raw_dets in zip(ready_cams, ready_frames, batch_dets):
-                cam_id = str(cam["id"])
-                t_trk = time.perf_counter()
-                tracked = self._tracker.update(cam_id, raw_dets, ts_mono=df.ts_mono)
-                track_ms = round((time.perf_counter() - t_trk) * 1000.0, 2)
-
-                if self._display_pipeline is not None:
-                    self._display_pipeline.record_ai_tracks(
-                        cam_id,
-                        ts_capture_mono=df.ts_mono,
-                        tracks=tracked,
-                        inference_ms=per_cam_ms,
-                    )
-
-                result = self._evaluate_camera(cam, tracked, inference_ms=per_cam_ms, updated_at=df.ts_wall)
+        # Per-camera immediate decode -> YOLO -> Tracker -> immediate WS bbox push (~60ms/cam)
+        for cam, pkt in ready_cams:
+            if self._stop_event.is_set():
+                break
+            cam_id = str(cam["id"])
+            t_dec = time.perf_counter()
+            if pkt.frame is not None:
+                bgr = pkt.frame
+            else:
+                buf = np.frombuffer(pkt.jpeg_bytes, dtype=np.uint8)
+                bgr = cv2.imdecode(buf, cv2.IMREAD_COLOR)
+            decode_ms = round((time.perf_counter() - t_dec) * 1000.0, 2)
+            if bgr is None:
                 with self._lock:
-                    self._results[cam_id] = result
-                    self._last_frame_id[cam_id] = df.frame_id
-                    self._ai_metrics[cam_id] = {
-                        "infer_ms": per_cam_ms,
-                        "track_ms": track_ms,
+                    self._last_frame_id[cam_id] = pkt.seq
+                continue
+
+            t_inf = time.perf_counter()
+            raw_dets = self._detector.detect(bgr)
+            infer_ms = max(1, round((time.perf_counter() - t_inf) * 1000.0))
+
+            t_trk = time.perf_counter()
+            tracked = self._tracker.update(cam_id, raw_dets, ts_mono=pkt.ts_mono)
+            track_ms = round((time.perf_counter() - t_trk) * 1000.0, 2)
+
+            result = self._evaluate_camera(cam, tracked, inference_ms=infer_ms, updated_at=pkt.ts_wall)
+            e2e_ms = round((time.monotonic() - pkt.ts_mono) * 1000.0)
+            with self._lock:
+                self._results[cam_id] = result
+                self._last_frame_id[cam_id] = pkt.seq
+                self._ai_metrics[cam_id] = {
+                    "decode_ms": decode_ms,
+                    "infer_ms": infer_ms,
+                    "track_ms": track_ms,
+                    "e2e_ms": e2e_ms,
+                }
+
+            if self._on_bbox is not None:
+                self._on_bbox(
+                    {
+                        "type": "bbox",
+                        "cam_id": cam_id,
+                        "frame_id": pkt.seq,
+                        "ts_capture": pkt.ts_wall,
+                        "delay_ms": e2e_ms,
+                        "inference_ms": infer_ms,
+                        "in_zone_count": result["in_zone_count"],
+                        "persons": result["persons"],
                     }
+                )
 
-                # When sync delay is 0 or pipeline absent, emit bbox directly from AI inference
-                if self._on_bbox is not None and (
-                    self._display_pipeline is None or self._display_pipeline.sync_delay_sec <= 0.0
-                ):
-                    self._on_bbox(
-                        {
-                            "type": "bbox",
-                            "cam_id": cam_id,
-                            "frame_id": df.frame_id,
-                            "ts_capture": df.ts_wall,
-                            "delay_ms": round((time.monotonic() - df.ts_mono) * 1000.0),
-                            "inference_ms": per_cam_ms,
-                            "in_zone_count": result["in_zone_count"],
-                            "persons": result["persons"],
-                        }
-                    )
-
-                self._emit_hud_if_needed(cam_id, result, now_mono)
-                changed = True
+            self._emit_hud_if_needed(cam_id, result, time.monotonic())
+            changed = True
 
         # Update HUD clocks only (NEVER re-emit stale BBoxes!)
         for cam in idle_cams:

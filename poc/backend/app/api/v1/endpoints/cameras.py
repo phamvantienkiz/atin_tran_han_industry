@@ -6,15 +6,12 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import Response, StreamingResponse
 
-from app.ai.display_pipeline import DisplayAndSyncPipeline
 from app.ai.nvr_stream import NvrStreamManager
 from app.api.deps import (
     get_camera_service,
-    get_display_pipeline,
     get_media_service,
     get_nvr_stream_manager,
 )
-from app.core.config import settings
 from app.schemas.camera import CameraCreate, CameraUpdate, ZonePayload
 from app.schemas.media import RecordStartPayload
 from app.services.camera_service import CameraService
@@ -106,58 +103,42 @@ async def stream_mjpeg(
     request: Request,
     service: Annotated[CameraService, Depends(get_camera_service)],
     stream_manager: Annotated[NvrStreamManager, Depends(get_nvr_stream_manager)],
-    display_pipeline: Annotated[DisplayAndSyncPipeline, Depends(get_display_pipeline)],
     subtype: int | None = Query(default=None, ge=0, le=2),
     view: str = Query(default="grid", pattern="^(grid|focus)$"),
 ) -> StreamingResponse:
+    _ = view  # reserved query param for frontend compatibility
     cam = service.get_camera(cam_id)
     requested_sub = int(cam.get("subtype", 0)) if subtype is None else subtype
 
-    # Fast path: serve event-driven synced/encoded JPEG from DisplayAndSyncPipeline (or raw RAM packet)
+    # Direct event-driven passthrough from NvrStreamManager (0ms delay, 0 CPU decode/encode)
     cached_pkt = stream_manager.latest(cam_id)
     if cached_pkt is not None and cached_pkt.subtype == requested_sub:
-        valve_sec = max(0.05, settings.STREAM_VALVE_MS / 1000.0)
 
         async def ram_iterator() -> AsyncIterator[bytes]:
-            ev = display_pipeline.register_mjpeg_waiter(cam_id)
-            last_frame_id = -1
+            ev = stream_manager.register_waiter(cam_id)
+            last_seq = -1
             try:
                 while not await request.is_disconnected():
-                    df = display_pipeline.latest_released(cam_id)
-                    if df is not None and df.frame_id != last_frame_id:
-                        last_frame_id = df.frame_id
-                        jpg = display_pipeline.encode_for_viewer(df, view)
-                        if jpg:
-                            yield _format_mjpeg_part(jpg)
-                    else:
-                        pkt = stream_manager.latest(cam_id)
-                        if pkt is None or pkt.subtype != requested_sub:
-                            break
-                        if df is None and pkt.seq != last_frame_id:
-                            last_frame_id = pkt.seq
-                            yield _format_mjpeg_part(pkt.jpeg_bytes)
-
+                    pkt = stream_manager.latest(cam_id)
+                    if pkt is None or pkt.subtype != requested_sub:
+                        break
+                    if pkt.seq != last_seq:
+                        last_seq = pkt.seq
+                        yield _format_mjpeg_part(pkt.jpeg_bytes)
                     ev.clear()
                     try:
-                        await asyncio.wait_for(ev.wait(), timeout=valve_sec)
+                        await asyncio.wait_for(ev.wait(), timeout=1.0)
                     except asyncio.TimeoutError:
-                        # Release valve: flush latest frame so video never stalls if AI slows down
-                        latest_df = display_pipeline.latest_decoded(cam_id)
-                        if latest_df is not None and latest_df.frame_id != last_frame_id:
-                            display_pipeline.record_valve_timeout(cam_id)
-                            last_frame_id = latest_df.frame_id
-                            jpg = display_pipeline.encode_for_viewer(latest_df, view)
-                            if jpg:
-                                yield _format_mjpeg_part(jpg)
+                        continue
             finally:
-                display_pipeline.unregister_mjpeg_waiter(cam_id, ev)
+                stream_manager.unregister_waiter(cam_id, ev)
 
         return StreamingResponse(
             ram_iterator(),
             media_type="multipart/x-mixed-replace; boundary=frame",
             headers={
                 "Cache-Control": "no-store, no-cache, must-revalidate",
-                "X-Stream-Source": f"ram-synced-{view}",
+                "X-Stream-Source": "ram-direct",
             },
         )
 
