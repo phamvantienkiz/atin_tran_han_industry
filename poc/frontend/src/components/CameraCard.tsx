@@ -54,6 +54,7 @@ export function CameraCard({
   const [savingZone, setSavingZone] = useState(false);
   const retryCountRef = useRef(0);
   const cardRef = useRef<HTMLElement | null>(null);
+  const streamImgRef = useRef<HTMLImageElement | null>(null);
 
   // Refresh stream when refreshNonce changes
   useEffect(() => {
@@ -196,6 +197,16 @@ export function CameraCard({
         ? `/api/v1/cameras/${encodeURIComponent(cam.id)}/snapshot.jpg?t=${streamTick}`
         : `/api/v1/cameras/${encodeURIComponent(cam.id)}/mjpeg?subtype=${cam.subtype}&view=grid&t=${streamTick}`;
 
+  // Explicitly abort MJPEG TCP socket in Chromium when pausing/unmounting
+  useEffect(() => {
+    const imgEl = streamImgRef.current;
+    return () => {
+      if (imgEl) {
+        imgEl.src = '';
+      }
+    };
+  }, [streamUrl]);
+
   const streamModeLabel =
     cam.mode === 'snapshot'
       ? 'Snapshot'
@@ -328,6 +339,7 @@ export function CameraCard({
         {/* Layer 1: Live MJPEG/Snapshot */}
         {streamUrl && (
           <img
+            ref={streamImgRef}
             src={streamUrl}
             alt={`Luồng trực tiếp ${cam.name}`}
             onLoad={() => {
@@ -344,6 +356,13 @@ export function CameraCard({
           <img
             src={zoneBgUrl}
             alt={`Ảnh nền vẽ vùng ${cam.name}`}
+            onError={() => {
+              if (!zoneBgUrl.includes('direct=true')) {
+                setZoneBgUrl(
+                  `/api/v1/cameras/${encodeURIComponent(cam.id)}/snapshot.jpg?direct=true&t=${Date.now()}`,
+                );
+              }
+            }}
             className="absolute inset-0 w-full h-full object-fill select-none z-[5]"
           />
         )}

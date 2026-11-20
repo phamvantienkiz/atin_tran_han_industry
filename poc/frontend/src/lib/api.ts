@@ -12,16 +12,28 @@ import type {
   ZonePoint,
 } from '@/types';
 
-async function request<T>(method: string, url: string, body?: unknown): Promise<T> {
+async function request<T>(method: string, url: string, body?: unknown, timeoutMs = 15000): Promise<T> {
   const headers: Record<string, string> = {};
-  const init: RequestInit = { method, headers };
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const init: RequestInit = { method, headers, signal: controller.signal };
 
   if (body !== undefined) {
     headers['Content-Type'] = 'application/json';
     init.body = JSON.stringify(body);
   }
 
-  const res = await fetch(url, init);
+  let res: Response;
+  try {
+    res = await fetch(url, init);
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw new Error('Hết thời gian chờ phản hồi từ server');
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
   if (!res.ok) {
     let detail = `HTTP ${res.status}`;
     try {
