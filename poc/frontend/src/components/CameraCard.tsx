@@ -363,26 +363,20 @@ export function CameraCard({
           onAddPoint={(pt) => setDraftPoints((prev) => [...prev, pt])}
         />
 
-        {/* Layer 5: Top-right Stream Health Badge */}
-        {!editingZone && (
+        {/* Layer 5: Top-right Stream Health Badge (shown only when paused/connecting/error) */}
+        {!editingZone && (streamPaused || streamHealth !== 'live') && (
           <div className="absolute top-3 right-3 z-10 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-pill bg-slate-900/75 border border-white/10 text-[11px] font-medium text-white pointer-events-none">
             <span
               className={`w-2 h-2 rounded-full ${
-                streamHealth === 'live'
-                  ? 'bg-status-present'
-                  : streamHealth === 'error'
-                    ? 'bg-status-alert'
-                    : 'bg-status-empty'
+                streamHealth === 'error' ? 'bg-status-alert' : 'bg-status-empty'
               }`}
             />
             <span>
               {streamPaused
                 ? 'Đang phóng to'
-                : streamHealth === 'live'
-                  ? 'Trực tiếp'
-                  : streamHealth === 'error'
-                    ? 'Mất tín hiệu'
-                    : 'Đang kết nối'}
+                : streamHealth === 'error'
+                  ? 'Mất tín hiệu'
+                  : 'Đang kết nối'}
             </span>
           </div>
         )}
