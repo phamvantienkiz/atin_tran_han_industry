@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import os
 import threading
 import time
 from dataclasses import dataclass
 from typing import Any
-from urllib.parse import quote, urlparse
 
 import cv2
 import httpx
@@ -75,9 +73,6 @@ class NvrChannelReader:
         nvr_user: str,
         nvr_pass: str,
         fps_limit: float = 12.0,
-        ingest_mode: str = "rtsp_http",
-        rtsp_port: int | None = None,
-        rtsp_subtype: int = 0,
     ) -> None:
         self.cam_id = cam_id
         self.channel = channel
@@ -86,9 +81,6 @@ class NvrChannelReader:
         self._nvr_user = nvr_user
         self._nvr_pass = nvr_pass
         self._min_decode_interval = 1.0 / fps_limit if fps_limit > 0 else 0.0
-        self._ingest_mode = ingest_mode.strip().lower()
-        self._rtsp_port = rtsp_port
-        self._rtsp_subtype = rtsp_subtype
 
         self._lock = threading.Lock()
         self._latest: NvrFramePacket | None = None
@@ -178,69 +170,6 @@ class NvrChannelReader:
                 )
         return True
 
-    def _store_bgr_frame(self, frame: np.ndarray) -> bool:
-        now_mono = time.monotonic()
-        with self._lock:
-            existing = self._latest
-        if (
-            existing is not None
-            and self._min_decode_interval > 0.0
-            and (now_mono - self._last_decode_mono) < self._min_decode_interval
-        ):
-            return False
-
-        ok, enc = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
-        if not ok:
-            return False
-        self._last_decode_mono = now_mono
-        with self._lock:
-            self._seq += 1
-            self._latest = NvrFramePacket(
-                cam_id=self.cam_id,
-                channel=self.channel,
-                subtype=self._rtsp_subtype,
-                frame=frame,
-                jpeg_bytes=enc.tobytes(),
-                seq=self._seq,
-                ts_mono=now_mono,
-                ts_wall=time.time(),
-            )
-        return True
-
-    def _build_rtsp_url(self) -> str:
-        parsed = urlparse(self._nvr_base_url)
-        host = parsed.hostname or ""
-        port = self._rtsp_port or parsed.port or 80
-        user = quote(self._nvr_user, safe="")
-        pwd = quote(self._nvr_pass, safe="")
-        return (
-            f"rtsp://{user}:{pwd}@{host}:{port}"
-            f"/cam/realmonitor?channel={self.channel}&subtype={self._rtsp_subtype}"
-        )
-
-    def _stream_rtsp_once(self) -> None:
-        transport = "tcp" if self._ingest_mode == "rtsp_tcp" else "http"
-        os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = f"rtsp_transport;{transport}|stimeout;5000000"
-        url = self._build_rtsp_url()
-        cap = cv2.VideoCapture(url, cv2.CAP_FFMPEG)
-        if not cap.isOpened():
-            cap.release()
-            raise RuntimeError(f"Cannot open RTSP ({transport}) stream")
-
-        try:
-            last_ok = time.monotonic()
-            while not self._stop_event.is_set():
-                ok, frame = cap.read()
-                if ok and frame is not None:
-                    self._store_bgr_frame(frame)
-                    last_ok = time.monotonic()
-                elif (time.monotonic() - last_ok) > _MJPEG_STALL_TIMEOUT_SEC:
-                    raise TimeoutError("RTSP stream stalled")
-                else:
-                    self._stop_event.wait(0.05)
-        finally:
-            cap.release()
-
     def _set_active_client(self, client: httpx.Client | None) -> None:
         with self._client_lock:
             self._active_client = client
@@ -299,35 +228,19 @@ class NvrChannelReader:
 
     def _run(self) -> None:
         logger.info(
-            "Starting NVR stream reader cam=%s ch=%s mode=%s subtype=%s",
+            "Starting NVR stream reader cam=%s ch=%s subtype=%s",
             self.cam_id,
             self.channel,
-            self._ingest_mode,
-            self._rtsp_subtype if self._ingest_mode.startswith("rtsp") else self.subtype,
+            self.subtype,
         )
         while not self._stop_event.is_set():
             try:
-                if self._ingest_mode in ("rtsp_http", "rtsp_tcp"):
-                    self._stream_rtsp_once()
-                else:
-                    self._stream_mjpeg_once()
+                self._stream_mjpeg_once()
             except Exception as exc:  # noqa: BLE001 - resilient stream recovery
                 if self._stop_event.is_set():
                     break
-                if self._ingest_mode in ("rtsp_http", "rtsp_tcp"):
-                    logger.warning(
-                        "RTSP reader cam=%s (ch=%s) failed (%s); falling back to MJPEG once",
-                        self.cam_id,
-                        self.channel,
-                        exc,
-                    )
-                    try:
-                        self._stream_mjpeg_once()
-                        continue
-                    except Exception as mjpeg_exc:  # noqa: BLE001
-                        exc = mjpeg_exc
                 logger.warning(
-                    "Stream reader cam=%s (ch=%s) interrupted (%s); switching to snapshot fallback for %.0fs",
+                    "MJPEG reader cam=%s (ch=%s) interrupted (%s); switching to snapshot fallback for %.0fs",
                     self.cam_id,
                     self.channel,
                     exc,
@@ -349,18 +262,12 @@ class NvrStreamManager:
         nvr_pass: str,
         nvr_configured: bool,
         fps_limit: float = 12.0,
-        ingest_mode: str = "rtsp_http",
-        rtsp_port: int | None = None,
-        rtsp_subtype: int = 0,
     ) -> None:
         self._nvr_base_url = nvr_base_url
         self._nvr_user = nvr_user
         self._nvr_pass = nvr_pass
         self._nvr_configured = nvr_configured
         self._fps_limit = fps_limit
-        self._ingest_mode = ingest_mode
-        self._rtsp_port = rtsp_port
-        self._rtsp_subtype = rtsp_subtype
         self._lock = threading.Lock()
         self._readers: dict[str, NvrChannelReader] = {}
         self._stopped = False
@@ -399,9 +306,6 @@ class NvrStreamManager:
                         nvr_user=self._nvr_user,
                         nvr_pass=self._nvr_pass,
                         fps_limit=self._fps_limit,
-                        ingest_mode=self._ingest_mode,
-                        rtsp_port=self._rtsp_port,
-                        rtsp_subtype=self._rtsp_subtype,
                     )
                     reader.start()
                     self._readers[cam_id] = reader

@@ -46,9 +46,6 @@ class Settings(BaseSettings):
     NVR_PORT: int = 80
     NVR_USER: str = ""
     NVR_PASS: str = ""
-    NVR_INGEST_MODE: str = "rtsp_http"  # rtsp_http | rtsp_tcp | mjpeg
-    NVR_RTSP_PORT: int = 0  # 0 => reuse NVR_PORT (port 80 for rtsp_http)
-    NVR_RTSP_SUBTYPE: int = 0  # 0 => main-stream (H.264/H.265 1080p)
     NVR_STREAM_FPS_LIMIT: float = 12.0
 
     # --- AI Core ---
