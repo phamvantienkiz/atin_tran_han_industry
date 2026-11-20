@@ -211,8 +211,8 @@ export function CameraOverlayCanvas({
       const by1 = p.y1 * h;
       const bw = Math.max(2, (p.x2 - p.x1) * w);
       const bh = Math.max(2, (p.y2 - p.y1) * h);
-      const footX = (p.foot_x ?? p.cx) * w;
-      const footY = (p.foot_y ?? p.y2) * h;
+      const centerX = p.cx * w;
+      const centerY = p.cy * h;
       const trackLabelId = p.track_id ?? idx + 1;
 
       ctx.save();
@@ -237,9 +237,9 @@ export function CameraOverlayCanvas({
         ctx.textBaseline = 'middle';
         ctx.fillText(label, lx + padX, ly + lh / 2 + 0.5);
 
-        // Foot anchor dot
+        // Center anchor dot
         ctx.beginPath();
-        ctx.arc(footX, footY, 4.5, 0, Math.PI * 2);
+        ctx.arc(centerX, centerY, 4.5, 0, Math.PI * 2);
         ctx.fillStyle = '#22C55E';
         ctx.fill();
         ctx.lineWidth = 2;

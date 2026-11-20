@@ -116,10 +116,6 @@ class Settings(BaseSettings):
         best_path = models_dir / "yolo26s_best.onnx"
         fp16_path = models_dir / "yolo26s_fp16.onnx"
 
-        # Prefer the factory-person model yolo26s.onnx even if an older .env points to yolo26s_fp16/best
-        if configured.name in ("yolo26s_fp16.onnx", "yolo26s_best.onnx") and default_path.is_file():
-            return default_path
-
         if configured.is_file():
             return configured
 

@@ -56,6 +56,7 @@ class YoloPersonDetector:
 
         self._session: ort.InferenceSession | None = None
         self._input_name: str = "images"
+        self._input_dtype: Any = np.float32
         self._dynamic_batch: bool = False
         self.active_provider: str = "uninitialized"
 
@@ -115,6 +116,7 @@ class YoloPersonDetector:
                     raise
             inp = session.get_inputs()[0]
             self._input_name = inp.name
+            self._input_dtype = np.float16 if "float16" in (inp.type or "").lower() else np.float32
             dim0 = inp.shape[0] if inp.shape else 1
             self._dynamic_batch = isinstance(dim0, str) or dim0 is None or dim0 != 1
             active_providers = session.get_providers()
@@ -124,7 +126,7 @@ class YoloPersonDetector:
             model_names = meta_map.get("names", "unknown")
 
             # Warmup pass to initialize CUDA context & cuDNN kernels before live stream hits
-            dummy = np.zeros((1, 3, self.imgsz, self.imgsz), dtype=np.float32)
+            dummy = np.zeros((1, 3, self.imgsz, self.imgsz), dtype=self._input_dtype)
             session.run(None, {self._input_name: dummy})
 
             self._session = session
@@ -160,7 +162,7 @@ class YoloPersonDetector:
 
         batch_results: list[list[PersonDetection]] = []
         for (h, w), (_, scale, pad_x, pad_y), output in zip(shapes, prepped, raw_outputs):
-            raw_boxes = self._postprocess(output, w, h, scale, pad_x, pad_y)
+            raw_boxes = self._postprocess(np.asarray(output, dtype=np.float32), w, h, scale, pad_x, pad_y)
             detections: list[PersonDetection] = []
             for x1, y1, x2, y2, score in raw_boxes:
                 nx1 = max(0.0, min(1.0, x1 / w))
@@ -205,6 +207,8 @@ class YoloPersonDetector:
 
         rgb = cv2.cvtColor(canvas, cv2.COLOR_BGR2RGB)
         blob = np.transpose(rgb.astype(np.float32) / 255.0, (2, 0, 1))[None, ...]
+        if self._input_dtype != np.float32:
+            blob = blob.astype(self._input_dtype)
         return np.ascontiguousarray(blob), scale, float(left), float(top)
 
     def _postprocess(
