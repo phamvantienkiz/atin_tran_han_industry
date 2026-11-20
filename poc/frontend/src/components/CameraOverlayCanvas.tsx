@@ -268,7 +268,7 @@ export function CameraOverlayCanvas({
         ctx.fillText(label, lx + padX, ly + lh / 2 + 0.5);
 
         ctx.beginPath();
-        ctx.arc(footX, footY, 3, 0, Math.PI * 2);
+        ctx.arc(centerX, centerY, 3, 0, Math.PI * 2);
         ctx.fillStyle = '#94A3B8';
         ctx.fill();
       }
