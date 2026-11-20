@@ -10,6 +10,16 @@ class ZonePayload(BaseModel):
     points: list[ZonePoint]
 
 
+class DrumZone(BaseModel):
+    id: str = Field(min_length=1, max_length=64)
+    name: str = Field(min_length=1, max_length=80)
+    points: list[ZonePoint]
+
+
+class DrumsPayload(BaseModel):
+    drums: list[DrumZone]
+
+
 class CameraCreate(BaseModel):
     channel: int = Field(ge=1, le=128)
     name: str = Field(min_length=1, max_length=120)
@@ -49,3 +59,4 @@ class CameraRead(BaseModel):
     warning_seconds: float = 10.0
     enabled: bool = True
     zone: list[ZonePoint] = Field(default_factory=list)
+    drums: list[DrumZone] = Field(default_factory=list)

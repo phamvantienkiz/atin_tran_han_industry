@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  Disc,
   Download,
   Loader2,
   Maximize2,
   Pentagon,
+  Plus,
   RotateCcw,
   Settings,
   Trash2,
@@ -14,7 +16,7 @@ import {
 import { api } from '@/lib/api';
 import { CameraOverlayCanvas } from '@/components/CameraOverlayCanvas';
 import { ZoneHudOverlay } from '@/components/ZoneHudOverlay';
-import type { Camera, ZonePoint } from '@/types';
+import type { Camera, DrumZone, ZonePoint } from '@/types';
 
 interface CameraCardProps {
   cam: Camera;
@@ -44,12 +46,16 @@ export function CameraCard({
   const [latencyMs, setLatencyMs] = useState<number | null>(null);
   const [isAlert, setIsAlert] = useState(false);
 
-  // Zone Editor state
+  // Zone & Drum ROI Editor state
   const [editingZone, setEditingZone] = useState(false);
+  const [editingDrums, setEditingDrums] = useState(false);
   const [draftPoints, setDraftPoints] = useState<ZonePoint[]>([]);
+  const [draftDrums, setDraftDrums] = useState<DrumZone[]>([]);
+  const [drumName, setDrumName] = useState('Cối 1');
   const [zoneBgUrl, setZoneBgUrl] = useState<string>('');
   const [savingZone, setSavingZone] = useState(false);
   const retryCountRef = useRef(0);
+  const isEditingAny = editingZone || editingDrums;
 
   const probeLatency = useCallback(async () => {
     try {
@@ -103,6 +109,8 @@ export function CameraCard({
   }, [editingZone]);
 
   const startZoneEditor = () => {
+    setEditingDrums(false);
+    setDraftDrums([]);
     setDraftPoints((cam.zone || []).map((p) => ({ ...p })));
     setZoneBgUrl(`/api/v1/cameras/${encodeURIComponent(cam.id)}/snapshot.jpg?t=${Date.now()}`);
     setEditingZone(true);
@@ -112,6 +120,77 @@ export function CameraCard({
     setEditingZone(false);
     setDraftPoints([]);
     setZoneBgUrl('');
+  };
+
+  const startDrumsEditor = () => {
+    setEditingZone(false);
+    const existing = (cam.drums || []).map((d) => ({
+      ...d,
+      points: d.points.map((p) => ({ ...p })),
+    }));
+    setDraftDrums(existing);
+    setDraftPoints([]);
+    setDrumName(`Cối ${existing.length + 1}`);
+    setZoneBgUrl(`/api/v1/cameras/${encodeURIComponent(cam.id)}/snapshot.jpg?t=${Date.now()}`);
+    setEditingDrums(true);
+  };
+
+  const cancelDrumsEditor = () => {
+    setEditingDrums(false);
+    setDraftDrums([]);
+    setDraftPoints([]);
+    setZoneBgUrl('');
+  };
+
+  const handleCommitDraftDrum = () => {
+    if (draftPoints.length < 3) {
+      onNotify('ROI mỗi cối cần tối thiểu 3 điểm');
+      return;
+    }
+    const name = drumName.trim() || `Cối ${draftDrums.length + 1}`;
+    const next: DrumZone[] = [
+      ...draftDrums,
+      { id: `drum_${Date.now() % 100000}_${draftDrums.length + 1}`, name, points: draftPoints },
+    ];
+    setDraftDrums(next);
+    setDraftPoints([]);
+    setDrumName(`Cối ${next.length + 1}`);
+  };
+
+  const handleSaveDrums = async () => {
+    let finalDrums = [...draftDrums];
+    if (draftPoints.length >= 3) {
+      const name = drumName.trim() || `Cối ${finalDrums.length + 1}`;
+      finalDrums = [
+        ...finalDrums,
+        { id: `drum_${Date.now() % 100000}_${finalDrums.length + 1}`, name, points: draftPoints },
+      ];
+    }
+    setSavingZone(true);
+    try {
+      const updated = await api.saveDrums(cam.id, finalDrums);
+      onZoneSaved(updated);
+      cancelDrumsEditor();
+      onNotify(`Đã lưu ${finalDrums.length} vùng cối cho ${cam.name}`);
+    } catch (err) {
+      onNotify(err instanceof Error ? err.message : 'Lỗi lưu ROI cối');
+    } finally {
+      setSavingZone(false);
+    }
+  };
+
+  const handleClearDrums = async () => {
+    setSavingZone(true);
+    try {
+      const updated = await api.saveDrums(cam.id, []);
+      onZoneSaved(updated);
+      cancelDrumsEditor();
+      onNotify(`Đã xóa toàn bộ ROI cối của ${cam.name}`);
+    } catch (err) {
+      onNotify(err instanceof Error ? err.message : 'Lỗi xóa ROI cối');
+    } finally {
+      setSavingZone(false);
+    }
   };
 
   const handleSaveZone = async () => {
@@ -154,7 +233,7 @@ export function CameraCard({
   };
 
   const handleStreamError = () => {
-    if (streamPaused || editingZone) return;
+    if (streamPaused || isEditingAny) return;
     if (retryCountRef.current < 2) {
       retryCountRef.current += 1;
       setTimeout(() => {
@@ -166,7 +245,7 @@ export function CameraCard({
   };
 
   const streamUrl =
-    streamPaused || editingZone
+    streamPaused || isEditingAny
       ? ''
       : cam.mode === 'snapshot'
         ? `/api/v1/cameras/${encodeURIComponent(cam.id)}/snapshot.jpg?t=${streamTick}`
@@ -224,6 +303,20 @@ export function CameraCard({
             aria-label={`Vẽ vùng giám sát ${cam.name}`}
           >
             <Pentagon className="w-4 h-4" strokeWidth={1.5} />
+          </button>
+
+          <button
+            type="button"
+            onClick={editingDrums ? cancelDrumsEditor : startDrumsEditor}
+            className={`icon-btn ${
+              editingDrums
+                ? '!bg-violet-600 !text-white !border-violet-600'
+                : ''
+            }`}
+            title={`Vẽ ROI cối xoay ${cam.name}`}
+            aria-label={`Vẽ ROI cối xoay ${cam.name}`}
+          >
+            <Disc className="w-4 h-4" strokeWidth={1.5} />
           </button>
 
           <a
@@ -294,10 +387,77 @@ export function CameraCard({
         </div>
       )}
 
+      {/* Tier 2b: Conditional Drum ROI Editor Toolbar */}
+      {editingDrums && (
+        <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-lg bg-surface-subtle border border-line">
+          <div className="flex items-center gap-2 flex-wrap">
+            <input
+              type="text"
+              value={drumName}
+              onChange={(e) => setDrumName(e.target.value)}
+              placeholder="Cối 1"
+              className="h-[30px] w-24 px-2 text-[12px] rounded-md border border-line bg-white text-content-heading"
+            />
+            <span className="text-[12px] font-medium text-content-secondary">
+              Đã vẽ: {draftDrums.length} cối · đang chấm {draftPoints.length} điểm
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <button
+              type="button"
+              onClick={handleCommitDraftDrum}
+              disabled={draftPoints.length < 3 || savingZone}
+              className="btn-subtle !min-h-[30px] !px-2.5 !text-[12px]"
+            >
+              <Plus className="w-3.5 h-3.5" strokeWidth={1.5} />
+              <span>Thêm cối</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (draftPoints.length > 0) setDraftPoints((prev) => prev.slice(0, -1));
+                else if (draftDrums.length > 0) setDraftDrums((prev) => prev.slice(0, -1));
+              }}
+              disabled={(draftPoints.length === 0 && draftDrums.length === 0) || savingZone}
+              className="btn-subtle !min-h-[30px] !px-2.5 !text-[12px]"
+            >
+              <RotateCcw className="w-3.5 h-3.5" strokeWidth={1.5} />
+              <span>Hoàn tác</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleClearDrums}
+              disabled={savingZone}
+              className="btn-danger !min-h-[30px] !px-2.5 !text-[12px]"
+            >
+              <Trash2 className="w-3.5 h-3.5" strokeWidth={1.5} />
+              <span>Xóa hết</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleSaveDrums}
+              disabled={savingZone || (draftDrums.length === 0 && draftPoints.length < 3)}
+              className="btn-primary !min-h-[30px] !px-2.5 !text-[12px]"
+            >
+              {savingZone && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              <span>{savingZone ? 'Đang lưu...' : 'Lưu cối'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={cancelDrumsEditor}
+              disabled={savingZone}
+              className="btn-subtle !min-h-[30px] !px-2.5 !text-[12px]"
+            >
+              Hủy
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Tier 3: 16:9 Viewport */}
       <div
         className={`relative aspect-video w-full rounded-lg bg-surface-video overflow-hidden transition-shadow duration-200 ${
-          isAlert && !editingZone ? 'viewport-alert-ring ring-[3px] ring-status-alert' : ''
+          isAlert && !isEditingAny ? 'viewport-alert-ring ring-[3px] ring-status-alert' : ''
         }`}
       >
         {/* Layer 1: Live MJPEG/Snapshot */}
@@ -314,8 +474,8 @@ export function CameraCard({
           />
         )}
 
-        {/* Layer 2: Static Snapshot background while editing zone */}
-        {editingZone && zoneBgUrl && (
+        {/* Layer 2: Static Snapshot background while editing zone/drums */}
+        {isEditingAny && zoneBgUrl && (
           <img
             src={zoneBgUrl}
             alt={`Ảnh nền vẽ vùng ${cam.name}`}
@@ -324,7 +484,7 @@ export function CameraCard({
         )}
 
         {/* Layer 3: AI Status HUD + 30-min Rolling Timeline */}
-        {!editingZone && (
+        {!isEditingAny && (
           <ZoneHudOverlay
             cam={cam}
             compact={compact}
@@ -335,13 +495,14 @@ export function CameraCard({
         {/* Layer 4: HiDPI Canvas Overlay (0 React re-renders for BBox) */}
         <CameraOverlayCanvas
           cam={cam}
-          editing={editingZone}
+          editing={isEditingAny}
           draftPoints={draftPoints}
+          draftDrums={editingDrums ? draftDrums : undefined}
           onAddPoint={(pt) => setDraftPoints((prev) => [...prev, pt])}
         />
 
         {/* Layer 5: Top-right Stream Health Badge */}
-        {!editingZone && (
+        {!isEditingAny && (
           <div className="absolute top-3 right-3 z-10 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-pill bg-slate-900/75 backdrop-blur-sm border border-white/10 text-[11px] font-medium text-white pointer-events-none">
             <span
               className={`w-2 h-2 rounded-full ${

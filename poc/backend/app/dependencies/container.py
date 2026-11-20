@@ -55,6 +55,7 @@ class ServiceContainer:
             grace_seconds=settings.AI_PRESENCE_GRACE_SECONDS,
             warning_seconds=settings.AI_PRESENCE_WARNING_SECONDS,
             timeline_window_seconds=settings.AI_TIMELINE_WINDOW_SECONDS,
+            drum_stop_alert_seconds=settings.AI_DRUM_STOP_ALERT_SECONDS,
             nvr_stream_manager=self.nvr_stream_manager,
             on_update=self.ws_hub.publish_from_thread,
         )

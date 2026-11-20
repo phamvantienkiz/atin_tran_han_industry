@@ -64,6 +64,7 @@ class Settings(BaseSettings):
     AI_FOCUS_TTL_SEC: float = 15.0
     AI_CONFIRM_SECONDS: float = 2.0
     AI_EVENT_COOLDOWN_SECONDS: float = 60.0
+    AI_DRUM_STOP_ALERT_SECONDS: float = 1800.0  # 30 minutes continuous stop alert per drum
     WS_PUSH_MAX_HZ: float = 15.0
 
     # --- Database (Production / Alembic) ---

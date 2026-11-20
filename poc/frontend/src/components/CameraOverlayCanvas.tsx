@@ -2,12 +2,13 @@
 
 import { useCallback, useEffect, useRef } from 'react';
 import { detectionStore } from '@/lib/detection-store';
-import type { Camera, CameraDetection, UiColor, ZonePoint } from '@/types';
+import type { Camera, CameraDetection, DrumZone, UiColor, ZonePoint } from '@/types';
 
 interface CameraOverlayCanvasProps {
   cam: Camera;
   editing?: boolean;
   draftPoints?: ZonePoint[];
+  draftDrums?: DrumZone[];
   onAddPoint?: (point: ZonePoint) => void;
 }
 
@@ -46,6 +47,7 @@ export function CameraOverlayCanvas({
   cam,
   editing = false,
   draftPoints = [],
+  draftDrums,
   onAddPoint,
 }: CameraOverlayCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -55,10 +57,12 @@ export function CameraOverlayCanvas({
   const camRef = useRef(cam);
   const editingRef = useRef(editing);
   const draftPointsRef = useRef(draftPoints);
+  const draftDrumsRef = useRef(draftDrums);
 
   camRef.current = cam;
   editingRef.current = editing;
   draftPointsRef.current = draftPoints;
+  draftDrumsRef.current = draftDrums;
 
   const draw = useCallback(() => {
     rafIdRef.current = null;
@@ -86,8 +90,39 @@ export function CameraOverlayCanvas({
     const isEditing = editingRef.current;
     const det = latestDetRef.current;
 
-    // 1. Editing mode: draw draft polygon in brand blue with dashed closing edge
+    // 1. Editing mode: draw saved draftDrums (if editing drums) + current draft polygon
     if (isEditing) {
+      const savedDraftDrums = draftDrumsRef.current || [];
+      savedDraftDrums.forEach((drum) => {
+        if (drum.points.length < 3) return;
+        ctx.save();
+        ctx.beginPath();
+        drum.points.forEach((pt, idx) => {
+          const px = pt.x * w;
+          const py = pt.y * h;
+          if (idx === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        });
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(139, 92, 246, 0.16)';
+        ctx.fill();
+        ctx.strokeStyle = '#8B5CF6';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        const cx = (drum.points.reduce((s, p) => s + p.x, 0) / drum.points.length) * w;
+        const cy = (drum.points.reduce((s, p) => s + p.y, 0) / drum.points.length) * h;
+        ctx.font = '600 11px Inter, system-ui, sans-serif';
+        const tw = ctx.measureText(drum.name).width;
+        drawRoundedRect(ctx, cx - tw / 2 - 6, cy - 9, tw + 12, 18, 4);
+        ctx.fillStyle = '#8B5CF6';
+        ctx.fill();
+        ctx.fillStyle = '#FFFFFF';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(drum.name, cx - tw / 2, cy + 0.5);
+        ctx.restore();
+      });
+
       const pts = draftPointsRef.current;
       if (pts.length === 0) return;
 
@@ -197,6 +232,74 @@ export function CameraOverlayCanvas({
         ctx.fillText(polyLabel, pillX + padX, pillY + pillH / 2 + 0.5);
       }
       ctx.restore();
+    }
+
+    // 2b. Draw configured Drum ROIs with live rotation status & 30-min stop alert
+    const drumsCfg = currentCam.drums || [];
+    if (drumsCfg.length > 0) {
+      const drumMap = new Map((det?.drums || []).map((d) => [d.id, d]));
+      const fmtStop = (sec: number) => {
+        const s = Math.max(0, Math.floor(sec));
+        const m = Math.floor(s / 60);
+        const r = s % 60;
+        return `${String(m).padStart(2, '0')}:${String(r).padStart(2, '0')}`;
+      };
+
+      drumsCfg.forEach((drum) => {
+        if (!drum.points || drum.points.length < 3) return;
+        const st = drumMap.get(drum.id);
+        const color = st
+          ? st.alert
+            ? '#EF4444'
+            : st.rotating
+              ? '#10B981'
+              : '#F59E0B'
+          : '#8B5CF6';
+        const fill = st
+          ? st.alert
+            ? 'rgba(239, 68, 68, 0.18)'
+            : st.rotating
+              ? 'rgba(16, 185, 129, 0.14)'
+              : 'rgba(245, 158, 11, 0.14)'
+          : 'rgba(139, 92, 246, 0.12)';
+
+        ctx.save();
+        ctx.beginPath();
+        let topPt = { x: drum.points[0].x * w, y: drum.points[0].y * h };
+        drum.points.forEach((pt, idx) => {
+          const px = pt.x * w;
+          const py = pt.y * h;
+          if (py < topPt.y) topPt = { x: px, y: py };
+          if (idx === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        });
+        ctx.closePath();
+        ctx.fillStyle = fill;
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = color;
+        ctx.stroke();
+
+        const tag = st
+          ? st.alert
+            ? `${drum.name} · CẢNH BÁO DỪNG 30p (${fmtStop(st.stopped_seconds)})`
+            : st.rotating
+              ? `${drum.name} · Đang xoay`
+              : `${drum.name} · Không xoay (${fmtStop(st.stopped_seconds)})`
+          : drum.name;
+
+        ctx.font = '600 10px Inter, system-ui, sans-serif';
+        const tw = ctx.measureText(tag).width;
+        const px = Math.max(4, Math.min(w - tw - 16, topPt.x - (tw + 12) / 2));
+        const py = Math.max(4, topPt.y - 20);
+        drawRoundedRect(ctx, px, py, tw + 12, 16, 4);
+        ctx.fillStyle = color;
+        ctx.fill();
+        ctx.fillStyle = '#FFFFFF';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(tag, px + 6, py + 8.5);
+        ctx.restore();
+      });
     }
 
     // 3. Anti-ghosting check before drawing Bounding Boxes (use client receipt timestamp to avoid clock skew)

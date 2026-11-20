@@ -13,6 +13,7 @@ import httpx
 import numpy as np
 
 from app.ai.detector import YoloPersonDetector
+from app.ai.drum_detector import DrumRotationMonitor
 from app.ai.nvr_stream import NvrFramePacket, NvrStreamManager
 from app.ai.rule_engine import ZoneEvaluation, ZoneRuleEngine
 from app.ai.tracker import CameraTracker, TrackedPerson
@@ -48,6 +49,7 @@ class PersonZoneDetector:
         grace_seconds: float = 2.0,
         warning_seconds: float = 10.0,
         timeline_window_seconds: int = 1800,
+        drum_stop_alert_seconds: float = 1800.0,
         nvr_stream_manager: NvrStreamManager | None = None,
         on_update: Callable[[dict[str, dict[str, Any]]], None] | None = None,
     ) -> None:
@@ -80,6 +82,7 @@ class PersonZoneDetector:
             anchor_mode=anchor_mode,
             default_feature_type="zone_presence",
         )
+        self._drum_monitor = DrumRotationMonitor(stop_alert_seconds=drum_stop_alert_seconds)
 
         self._lock = threading.Lock()
         self._results: dict[str, dict[str, Any]] = {}
@@ -125,6 +128,7 @@ class PersonZoneDetector:
         """Reset rule engine counters, timeline, and tracker state for one camera."""
         with self._lock:
             self._rule_engine.reset_stats(cam_id)
+            self._drum_monitor.reset(cam_id)
             self._tracker.reset(cam_id)
             self._last_tracked.pop(cam_id, None)
             self._last_timer_tick.pop(cam_id, None)
@@ -159,6 +163,7 @@ class PersonZoneDetector:
         eval_res: ZoneEvaluation,
         inference_ms: int,
         updated_at: float | None = None,
+        drums: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         return {
             "cam_id": cam_id,
@@ -167,6 +172,7 @@ class PersonZoneDetector:
             "in_zone_count": eval_res.in_zone_count,
             "total_persons": len(eval_res.persons),
             "persons": eval_res.persons,
+            "drums": [] if drums is None else drums,
             "dwell_seconds": eval_res.dwell_seconds,
             "event_triggered": eval_res.should_emit_event,
             "status": eval_res.status,
@@ -190,6 +196,8 @@ class PersonZoneDetector:
         tracked: list[TrackedPerson],
         inference_ms: int,
         updated_at: float | None = None,
+        frame: np.ndarray | None = None,
+        prev_drums: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         cam_id = str(cam["id"])
         zone = cam.get("zone") or []
@@ -207,7 +215,20 @@ class PersonZoneDetector:
             grace_seconds=float(grace_raw) if grace_raw is not None else None,
             warning_seconds=float(warning_raw) if warning_raw is not None else None,
         )
-        return self._build_result(cam_id, eval_res, inference_ms=inference_ms, updated_at=updated_at)
+        drums_cfg = cam.get("drums") or []
+        if frame is not None:
+            drums_status = self._drum_monitor.evaluate(cam_id, frame, drums_cfg, eval_res.persons)
+        elif drums_cfg and prev_drums is not None:
+            drums_status = prev_drums
+        else:
+            drums_status = []
+        return self._build_result(
+            cam_id,
+            eval_res,
+            inference_ms=inference_ms,
+            updated_at=updated_at,
+            drums=drums_status,
+        )
 
     def _detect_camera(self, client: httpx.Client, cam: dict[str, Any]) -> dict[str, Any]:
         """Fallback single-camera snapshot inference when NvrStreamManager is unavailable."""
@@ -234,7 +255,7 @@ class PersonZoneDetector:
         self._last_tracked[cam_id] = tracked
         self._last_infer_mono[cam_id] = now_mono
         self._last_timer_tick[cam_id] = now_mono
-        return self._evaluate_camera(cam, tracked, inference_ms=inference_ms)
+        return self._evaluate_camera(cam, tracked, inference_ms=inference_ms, frame=frame)
 
     @staticmethod
     def _empty_result(cam_id: str, has_zone: bool, error: str) -> dict[str, Any]:
@@ -294,7 +315,13 @@ class PersonZoneDetector:
             for cam, pkt, raw_dets in zip(ready_cams, ready_packets, batch_dets):
                 cam_id = str(cam["id"])
                 tracked = self._tracker.update(cam_id, raw_dets)
-                result = self._evaluate_camera(cam, tracked, inference_ms=per_cam_ms, updated_at=pkt.ts_wall)
+                result = self._evaluate_camera(
+                    cam,
+                    tracked,
+                    inference_ms=per_cam_ms,
+                    updated_at=pkt.ts_wall,
+                    frame=pkt.frame,
+                )
                 with self._lock:
                     self._results[cam_id] = result
                     self._last_seq[cam_id] = pkt.seq
@@ -326,6 +353,7 @@ class PersonZoneDetector:
                 effective_tracked,
                 inference_ms=prev_ms,
                 updated_at=prev_updated if is_stale else time.time(),
+                prev_drums=prev_result.get("drums") if prev_result else None,
             )
             with self._lock:
                 self._results[cam_id] = result

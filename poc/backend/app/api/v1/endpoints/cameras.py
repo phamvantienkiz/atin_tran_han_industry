@@ -8,7 +8,7 @@ from fastapi.responses import Response, StreamingResponse
 
 from app.ai.nvr_stream import NvrStreamManager
 from app.api.deps import get_camera_service, get_media_service, get_nvr_stream_manager
-from app.schemas.camera import CameraCreate, CameraUpdate, ZonePayload
+from app.schemas.camera import CameraCreate, CameraRead, CameraUpdate, DrumsPayload, ZonePayload
 from app.schemas.media import RecordStartPayload
 from app.services.camera_service import CameraService
 from app.services.media_service import MediaService
@@ -57,6 +57,15 @@ def save_zone(
     service: Annotated[CameraService, Depends(get_camera_service)],
 ) -> dict[str, Any]:
     return service.save_zone(cam_id, payload.points)
+
+
+@router.put("/{cam_id}/drums")
+def save_drums(
+    cam_id: str,
+    payload: DrumsPayload,
+    service: Annotated[CameraService, Depends(get_camera_service)],
+) -> dict[str, Any]:
+    return service.save_drums(cam_id, payload.drums)
 
 
 @router.get("/{cam_id}/snapshot.jpg")

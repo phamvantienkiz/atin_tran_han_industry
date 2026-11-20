@@ -6,6 +6,7 @@ import type {
   CameraDetection,
   CameraProbeResult,
   CameraUpdatePayload,
+  DrumZone,
   ExtractFramesResponse,
   FrameSetItem,
   VideoItem,
@@ -49,6 +50,8 @@ export const api = {
     request<{ status: string; id: string }>('DELETE', `/api/v1/cameras/${encodeURIComponent(id)}`),
   saveZone: (id: string, points: ZonePoint[]) =>
     request<Camera>('PUT', `/api/v1/cameras/${encodeURIComponent(id)}/zone`, { points }),
+  saveDrums: (id: string, drums: DrumZone[]) =>
+    request<Camera>('PUT', `/api/v1/cameras/${encodeURIComponent(id)}/drums`, { drums }),
   probeCamera: (id: string) =>
     request<CameraProbeResult>('GET', `/api/v1/cameras/${encodeURIComponent(id)}/probe`),
 

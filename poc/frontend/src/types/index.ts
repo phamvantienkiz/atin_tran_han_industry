@@ -3,6 +3,23 @@ export interface ZonePoint {
   y: number;
 }
 
+export interface DrumZone {
+  id: string;
+  name: string;
+  points: ZonePoint[];
+}
+
+export interface DrumStatus {
+  id: string;
+  name: string;
+  rotating: boolean;
+  label: string;
+  stopped_seconds: number;
+  alert: boolean;
+  occluded: boolean;
+  motion_score: number;
+}
+
 export type FeatureType = 'zone_presence' | 'zone_intrusion';
 export type StreamMode = 'mjpeg' | 'snapshot';
 export type UiColor = 'green' | 'yellow' | 'red' | 'idle';
@@ -21,6 +38,7 @@ export interface Camera {
   warning_seconds?: number;
   enabled: boolean;
   zone: ZonePoint[];
+  drums?: DrumZone[];
 }
 
 export interface CameraCreatePayload {
@@ -76,6 +94,7 @@ export interface CameraDetection {
   in_zone_count: number;
   total_persons: number;
   persons: DetectedPerson[];
+  drums?: DrumStatus[];
   dwell_seconds?: number;
   event_triggered?: boolean;
   status: PresenceStatus;

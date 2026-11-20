@@ -10,7 +10,7 @@ import httpx
 from app.ai.nvr_stream import NvrStreamManager
 from app.exceptions.custom import NotFoundError, UpstreamError
 from app.repositories.camera_repository import CameraRepository
-from app.schemas.camera import CameraCreate, CameraUpdate, ZonePoint
+from app.schemas.camera import CameraCreate, CameraUpdate, DrumZone, ZonePoint
 
 _RAM_SNAPSHOT_MAX_AGE_SEC = 2.0
 
@@ -89,6 +89,7 @@ class CameraService:
             "warning_seconds": payload.warning_seconds,
             "enabled": payload.enabled,
             "zone": [],
+            "drums": [],
         }
         cameras.append(cam)
         self._repo.save_all(cameras)
@@ -123,6 +124,15 @@ class CameraService:
         for cam in cameras:
             if cam.get("id") == cam_id:
                 cam["zone"] = [p.model_dump() for p in points]
+                self._repo.save_all(cameras)
+                return self._normalize_camera(cam)
+        raise NotFoundError(f"Camera '{cam_id}' không tồn tại")
+
+    def save_drums(self, cam_id: str, drums: list[DrumZone]) -> dict[str, Any]:
+        cameras = self._repo.list_all()
+        for cam in cameras:
+            if cam.get("id") == cam_id:
+                cam["drums"] = [d.model_dump() for d in drums]
                 self._repo.save_all(cameras)
                 return self._normalize_camera(cam)
         raise NotFoundError(f"Camera '{cam_id}' không tồn tại")
