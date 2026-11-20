@@ -33,6 +33,9 @@ Tài liệu ghi nhận toàn bộ lịch sử thay đổi, nâng cấp kiến tr
   - Đóng dấu thời gian nhận thực tế tại trình duyệt (`_client_ts = Date.now() / 1000`) khi nhận bản tin WebSocket `/api/v1/ws/detections`, thay vì lấy `Date.now()` của máy khách trừ `updated_at` (`time.time()`) của server `aiot` (tránh việc đồng hồ server chậm hơn máy khách `> 1.5s` làm Canvas xóa nhầm toàn bộ BBox).
 - **Sửa lỗi tăng `seq` trùng lặp khi chưa decode frame BGR mới ([nvr_stream.py](file:///e:/ATIN/atin_tran_han_industry/poc/backend/app/ai/nvr_stream.py))**:
   - Chỉ tăng `self._seq` khi thực sự giải mã frame BGR mới cho AI Worker, tránh việc AI chạy suy luận lặp lại trên frame cũ.
+- **Tương thích Python 3.10 mặc định của Ubuntu 22.04 trong container CUDA ([pyproject.toml](file:///e:/ATIN/atin_tran_han_industry/poc/backend/pyproject.toml), [common.py](file:///e:/ATIN/atin_tran_han_industry/poc/backend/app/schemas/common.py), [poc/Dockerfile](file:///e:/ATIN/atin_tran_han_industry/poc/Dockerfile))**:
+  - Hạ `requires-python = ">=3.10"` và dùng `timezone.utc` thay cho `datetime.UTC` để tương thích với `/usr/bin/python3` (`3.10.12`) trong base image `nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04`.
+  - Bổ sung bước kiểm tra `python3 -c "import uvicorn, fastapi, cv2, onnxruntime, supervision, app.main"` ngay trong quá trình `docker build`.
 
 ---
 

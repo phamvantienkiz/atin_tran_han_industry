@@ -41,7 +41,7 @@ Mọi component trong `poc/frontend/src/` **phải** sử dụng token ngữ ngh
 | | `--surface-subtle` | `bg-surface-subtle` | `#F8FAFC` | Nền vùng phụ trong thẻ, Segmented track, Input (`ds-atin1: color.surface.raised`) |
 | | `--surface-subtle-hover` | `bg-surface-subtle-hover` | `#E2E8F0` | Nền khi hover nút phụ / ghost button |
 | | `--surface-video` | `bg-surface-video` | `#000000` | Nền khung video camera 16:9 (`ds-atin1/2: color.surface.base`) |
-| | `--surface-hud` | `bg-surface-hud` | `rgba(15, 23, 42, 0.82)` | Nền kính mờ của HUD đè lên video (kèm `backdrop-blur-md`) |
+| | `--surface-hud` | `bg-surface-hud` | `rgba(15, 23, 42, 0.44)` | Nền kính mờ trong suốt của HUD đè lên video (`backdrop-blur-[3px]`, nhìn xuyên thấu thấy rõ Poly Zone phía sau) |
 | **Thương hiệu & Hành động (Brand)** | `--brand-primary` | `bg-brand-primary` / `text-brand-primary` | `#0284C7` | Nút chính (Primary CTA), trạng thái đang chọn, Focus ring (`ds-atin2: color.surface.strong`) |
 | | `--brand-primary-hover` | `hover:bg-brand-primary-hover` | `#0369A1` | Trạng thái hover của nút chính |
 | | `--brand-deep` | `text-brand-deep` | `#0044A4` | Điểm nhấn thương hiệu ATIN đậm, link/active badge (`ds-atin1: color.text.tertiary`) |
@@ -123,7 +123,7 @@ Sử dụng font **`Inter`** (`font-family: "Inter", system-ui, -apple-system, B
   --surface-subtle: #f8fafc;
   --surface-subtle-hover: #e2e8f0;
   --surface-video: #000000;
-  --surface-hud: rgba(15, 23, 42, 0.82);
+  --surface-hud: rgba(15, 23, 42, 0.44);
 
   /* Brand & Interactive */
   --brand-primary: #0284c7;
@@ -292,7 +292,7 @@ Theo yêu cầu của `ds-atin1.md` & `ds-atin2.md`, mọi component phải đ�
 #### A. Thanh Điều Hướng Đỉnh (`<Topbar />`)
 - **Anatomy**:
   - Chiều cao tối thiểu `64px`, nền `bg-surface-card/90 backdrop-blur-md border-b border-line sticky top-0 z-30`.
-  - **Cụm Trái**: Tên hệ thống `ATIN Trần Hân` (`text-[16px] font-semibold text-content-heading`) + phụ đề `Giám sát AI nhà máy thủy sản` (`text-[12px] text-content-secondary`) + **NVR Status Pill** (`rounded-pill px-3 py-1 bg-surface-subtle border border-line text-[12px]` với chấm tròn `8px` màu `--status-present` khi online, `--status-alert` khi offline).
+  - **Cụm Trái**: Tên hệ thống **`ATIN Smart Fishing`** (`text-[16px] font-semibold text-content-heading`) + phụ đề `Giám sát AI nhà máy thủy sản` (`text-[12px] text-content-secondary`) + **NVR Status Pill** (`rounded-pill px-3 py-1 bg-surface-subtle border border-line text-[12px]` với chấm tròn `8px` màu `--status-present` khi online, `--status-alert` khi offline).
   - **Cụm Phải**:
     - `Segmented Control` chuyển trang (`Live view` | `Video & Tách frame`).
     - `Global Recording Pill` (chỉ hiện khi có camera đang ghi hình: nền đỏ nhạt `bg-status-alert/10 text-status-alert border border-status-alert/30 rounded-pill px-3 py-1 text-[12px] font-medium` kèm chấm đỏ nhấp nháy).

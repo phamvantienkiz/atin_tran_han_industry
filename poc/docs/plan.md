@@ -1,5 +1,16 @@
 # Kế hoạch Thiết kế & Triển khai Chi tiết — Live View Giám sát Nhân viên trong Vùng Quy định
 
+> [!IMPORTANT]
+> **Cập nhật Trạng thái Triển khai (PoC v001 — `https://tranhan.atin.vn/`)**:
+> - Bản kế hoạch ban đầu dưới đây sử dụng MediaMTX WebRTC 3-port qua Termius. Khi chuyển sang yêu cầu **mở 1 Port duy nhất (`28080`) ra Public Internet (`https://tranhan.atin.vn/`) kèm chuyển đổi Frontend sang Next.js và đóng gói Docker Compose tại `poc/`**, toàn bộ kiến trúc thực thi chính thức đã được chuẩn hóa trong bộ tài liệu **[poc/docs/pocv001/](file:///e:/ATIN/atin_tran_han_industry/poc/docs/pocv001)**:
+>   1. [00_MASTER_OVERVIEW_AND_ARCHITECTURE.md](file:///e:/ATIN/atin_tran_han_industry/poc/docs/pocv001/00_MASTER_OVERVIEW_AND_ARCHITECTURE.md)
+>   2. [01_BACKEND_AND_AI_CORE_SPEC.md](file:///e:/ATIN/atin_tran_han_industry/poc/docs/pocv001/01_BACKEND_AND_AI_CORE_SPEC.md)
+>   3. [02_FRONTEND_NEXTJS_SPEC.md](file:///e:/ATIN/atin_tran_han_industry/poc/docs/pocv001/02_FRONTEND_NEXTJS_SPEC.md)
+>   4. [03_SERVER_AIOT_DEPLOYMENT_AND_HANDOFF_GUIDE.md](file:///e:/ATIN/atin_tran_han_industry/poc/docs/pocv001/03_SERVER_AIOT_DEPLOYMENT_AND_HANDOFF_GUIDE.md)
+>   5. [04_DESIGN_SYSTEM.md](file:///e:/ATIN/atin_tran_han_industry/poc/docs/pocv001/04_DESIGN_SYSTEM.md)
+>   6. [issuse.md](file:///e:/ATIN/atin_tran_han_industry/poc/docs/pocv001/issuse.md) & [poc/docs/deploy.md](file:///e:/ATIN/atin_tran_han_industry/poc/docs/deploy.md)
+> - Tài liệu `plan.md` này được giữ lại làm tài liệu tham chiếu cho giai đoạn sau khi chốt dự án cần bật lại nhánh **MediaMTX WebRTC 3-port**.
+
 > **Tài liệu tham chiếu**:
 > - Ảnh mẫu UI từ PM: `poc/frontend/requirment/{CoNhanVien.jpg, VungTrong.jpg, KhongCoNhanVien.jpg}`
 > - Tài liệu vận hành & kỹ thuật server `aiot` (`192.168.1.170`, RTX A400 4GB VRAM):

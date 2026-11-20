@@ -112,10 +112,10 @@ Tách hoàn toàn dữ liệu WebSocket thành **2 luồng cập nhật với t�
 
 ---
 
-## 3. Kết luận & Khuyến nghị
+## 3. Kết luận & Khuyến nghị (Đã Triển Khai Chính Thức Trong PoC v001)
 
-- **Chốt đề xuất**: Chọn **Phương án 1 — Next.js (App Router + TypeScript + Tailwind CSS) với `output: 'export'`**, để **FastAPI phục vụ trực tiếp thư mục `poc/frontend/out/` trên cổng `28080`**, kết hợp **Dual-Speed Rendering (`ref + rAF` cho Canvas BBox, `state` 1 Hz cho HUD)**.
-- **Lợi ích đạt được đồng thời**:
-  1. **Độ trễ BBox thấp nhất** (0 hop proxy + 0 React re-render cho Canvas).
-  2. **Vận hành tối giản trên server chung `aiot`**: vẫn 1 lệnh `uv`, 1 cửa sổ Termius, giữ nguyên 3 rule `-L 28080, 28889, 28189`, `Ctrl + C` dọn sạch 100%.
-  3. **Sẵn sàng mở rộng lớn**: component hóa rõ ràng cho cả 4 bài toán AI của nhà máy Trần Hân và dễ dàng tách deploy độc lập về sau nếu dự án lên Production.
+- **Kiến trúc đã chốt & triển khai**:
+  1. Chọn **Phương án 1 — Next.js 15 (App Router + TypeScript + Tailwind CSS) với `output: 'export'`**, để **FastAPI phục vụ trực tiếp thư mục `out/` trên cổng `28080`**, kết hợp **Dual-Speed Rendering (`ref + rAF` cho Canvas BBox, `state` 1 Hz cho HUD)**.
+  2. **Đóng gói Docker Multi-Stage tại thư mục gốc `poc/` ([poc/Dockerfile](file:///e:/ATIN/atin_tran_han_industry/poc/Dockerfile) + [poc/docker-compose.yml](file:///e:/ATIN/atin_tran_han_industry/poc/docker-compose.yml))**:
+     - Stage 1 (`node:20-alpine`) build tĩnh Next.js; Stage 2 (`nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04`) chạy FastAPI + `onnxruntime-gpu` CUDA 12 trên đúng cổng `28080`, ánh xạ thẳng ra domain công ty **`https://tranhan.atin.vn/`**.
+  3. **Xem bộ đặc tả chi tiết đầy đủ tại**: [poc/docs/pocv001/](file:///e:/ATIN/atin_tran_han_industry/poc/docs/pocv001) và hướng dẫn vận hành Docker tại [poc/docs/deploy.md](file:///e:/ATIN/atin_tran_han_industry/poc/docs/deploy.md).

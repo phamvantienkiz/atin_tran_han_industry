@@ -78,10 +78,11 @@ gpu = [
 #### Các biến trong `poc/backend/.env.example`:
 ```ini
 # --- Server & Port (1 Port duy nhất cho cả Next.js UI + FastAPI + WS + MJPEG) ---
-APP_NAME="ATIN Tran Han AI Backend"
+APP_NAME="ATIN Smart Fishing"
 ENVIRONMENT=poc
 DEBUG=true
 PORT=28080
+PROJECT_DISPLAY_NAME="ATIN Smart Fishing"
 SERVE_FRONTEND=true
 FRONTEND_DIR=../frontend/out
 FRONTEND_LEGACY_DIR=../frontend
@@ -93,9 +94,9 @@ NVR_USER=user
 NVR_PASS=testcam@123
 NVR_STREAM_FPS_LIMIT=12.0
 
-# --- AI Core (ONNX Runtime CUDA FP16 + ByteTrack + Zone Presence Rule Engine) ---
+# --- AI Core (ONNX Runtime CUDA 12 + ByteTrack + Zone Presence Rule Engine) ---
 AI_ENABLED=true
-MODEL_PATH=../models/yolo26s_best.onnx
+MODEL_PATH=../models/yolo26s.onnx
 AI_RUNTIME=auto
 AI_VRAM_LIMIT_MB=1024
 AI_CONF_THRESHOLD=0.40
@@ -112,11 +113,10 @@ WS_PUSH_MAX_HZ=15.0
 
 #### Logic resolve đường dẫn thông minh trong `app/core/config.py`:
 - **`frontend_path`**:
-  - Kiểm tra nếu `_resolve_path(self.FRONTEND_DIR)` (mặc định `../frontend/out`) tồn tại và có file `index.html` $\rightarrow$ trả về `../frontend/out` (bản build Next.js Static Export).
+  - Kiểm tra nếu `_resolve_path(self.FRONTEND_DIR)` (mặc định `../frontend/out` hoặc `/app/frontend/out` trong Docker) tồn tại và có file `index.html` $\rightarrow$ trả về thư mục đó (bản build Next.js Static Export).
   - Nếu chưa build `out/`, fallback về `_resolve_path(self.FRONTEND_LEGACY_DIR)` để server không bao giờ lỗi khởi động.
 - **`model_file_path`**:
-  - Nếu đang có file `poc/models/yolo26s_fp16.onnx` và `AI_RUNTIME in ("auto", "onnx_cuda")` (khi có `CUDAExecutionProvider`), ưu tiên dùng `yolo26s_fp16.onnx`.
-  - Nếu `MODEL_PATH` trỏ tới `../models/yolo26s.onnx` nhưng trên ổ đĩa là `../models/yolo26s_best.onnx`, tự động fallback sang `../models/yolo26s_best.onnx`.
+  - Ưu tiên sử dụng file `poc/models/yolo26s.onnx` (model fine-tune `factory_person_dataset`, `names = {0: 'person'}`) ngay cả khi biến `.env` cũ còn trỏ tới `yolo26s_fp16.onnx` hay `yolo26s_best.onnx`.
 
 ---
 

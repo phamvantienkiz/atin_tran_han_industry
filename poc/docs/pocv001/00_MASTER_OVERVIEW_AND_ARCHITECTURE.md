@@ -47,7 +47,7 @@ flowchart TB
             STREAM["NvrStreamManager (1 thread/cam)\nĐọc MJPEG/Snapshot từ NVR -> Lưu RAM (buffer=1)\n(Chia sẻ chung cho cả AI Core & Web UI)"]
             
             subgraph AICORE["Lõi AI GPU (VRAM <= 1024 MB)"]
-                DET["YoloPersonDetector\nonnxruntime-gpu CUDA FP16\nyolo26s_fp16.onnx / yolo26s_best.onnx"]
+                DET["YoloPersonDetector\nonnxruntime-gpu CUDA 12\nyolo26s.onnx (factory_person_dataset)"]
                 TRK["CameraTracker\nByteTrack + IoU Snap (>=0.45)\nAnchor: Điểm chân ((x1+x2)/2, y2)"]
                 RULE["ZoneRuleEngine\nState Machine 4 trạng thái -> 3 màu UI\nKPIs + Rolling Timeline 30 phút"]
             end
@@ -109,14 +109,14 @@ Tham chiếu trực tiếp từ 3 ảnh mẫu của PM tại `poc/frontend/requi
    - **Nhân viên TRONG vùng (`in_zone === true`)**: Vẽ nét liền đậm `2px` màu xanh lá `#22c55e`, nhãn pill nền xanh chữ trắng `Nhân viên #{track_id}`, chấm chân nổi bật.
    - **Nhân viên NGOÀI vùng (`in_zone === false`)**: Vẽ làm mờ (`globalAlpha = 0.42`), viền mảnh `1.25px` màu xám `#94a3b8`, nhãn nhỏ `#{track_id}`.
 3. **Chống bóng ma BBox (Anti-Ghosting)**: Nếu dữ liệu detection của camera cũ hơn `1.5 giây` (`Date.now()/1000 - detection.updated_at > 1.5`), Canvas vẫn giữ Polygon vùng giám sát nhưng tự động xóa các BBox cũ để không bị treo khung hình trên video.
-4. **HUD góc trên-trái mỗi camera**:
-   - Nền kính mờ tối (`rgba(18, 22, 28, 0.78)`, `backdrop-filter: blur(8px)`), thanh màu dọc `4px` bên trái đổi màu theo `green / yellow / red`.
+4. **HUD góc trên-trái mỗi camera (Trong suốt & Gọn nhẹ)**:
+   - Nền kính mờ trong suốt (`rgba(15, 23, 42, 0.44)`, `backdrop-filter: blur(3px)`), kích thước gọn (`max-w-[214px]` trên lưới 4/6 cam, `max-w-[262px]` khi phóng to), thanh màu dọc `3px` bên trái đổi màu theo `green / yellow / red`, nhìn xuyên thấu thấy rõ vùng Polygon và công nhân phía sau.
    - Hiển thị đủ 5 thành phần:
      1. Tiêu đề phụ: `GIÁM SÁT NHÂN VIÊN · {TÊN VÙNG}`
      2. Chấm tròn trạng thái + Nhãn chính (`CÓ NHÂN VIÊN` / `VÙNG TRỐNG` / `KHÔNG CÓ NHÂN VIÊN`)
      3. Nhãn phụ (`1 người trong vùng` / `Vừa rời khỏi vùng` / `không có người 00:02` / `Cảnh báo · vùng trống 00:12`)
-     4. Thống kê phiên: `Tổng thời gian cảnh báo: {MM:SS} · Số lần cảnh báo: {alert_count}`
-     5. Thanh **Dòng thời gian (30p gần nhất)** (`hud-timeline-bar`) hiển thị các dải màu `green / yellow / red` nối tiếp theo tỷ lệ thời gian thực.
+     4. Thống kê phiên: `Tổng cảnh báo: {MM:SS} · Số lần: {alert_count}`
+     5. Thanh **Timeline (30p)** (`hud-timeline-bar`) hiển thị các dải màu `green / yellow / red` nối tiếp theo tỷ lệ thời gian thực.
 
 ---
 
@@ -128,9 +128,10 @@ Khi **Hydrogen** hoặc **Neon** nhận nhiệm vụ từ bộ tài liệu này,
 2. **Tuân thủ cô lập môi trường 100% (`AGENTS.md`)**:
    - Python: Mọi lệnh chạy và cài đặt phải nằm trong `poc/backend/.venv` thông qua `uv`. Tuyệt đối không cài gói vào global Python hay Conda `(base)`.
    - Node.js: Mọi dependency của Next.js nằm trong `poc/frontend/node_modules`. Không dùng `npm install -g`.
-3. **Không dùng `ultralytics` lúc runtime**:
-   - Toàn bộ suy luận YOLO chạy thuần trên `onnxruntime` (CPU ở local Windows, `onnxruntime-gpu` với `CUDAExecutionProvider` + giới hạn VRAM `1024 MB` trên server `aiot`).
-   - Sử dụng model thực tế đang có trong repo là `poc/models/yolo26s_best.onnx` (và bản convert FP16 `poc/models/yolo26s_fp16.onnx`).
+3. **Không dùng `ultralytics` lúc runtime & Đóng gói Docker tại `poc/`**:
+   - Toàn bộ suy luận YOLO chạy thuần trên `onnxruntime` (CPU ở local Windows, `onnxruntime-gpu==1.23.2` với `CUDAExecutionProvider` + giới hạn VRAM `1024 MB` trong container `nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04` trên server `aiot`).
+   - Sử dụng model fine-tune riêng cho công nhân nhà máy tại `poc/models/yolo26s.onnx` (`factory_person_dataset`, 1 class `{0: 'person'}`).
+   - Toàn bộ hệ thống được đóng gói Multi-stage Docker tại `poc/Dockerfile` và `poc/docker-compose.yml` chạy trên cổng `28080` (`https://tranhan.atin.vn/`).
 4. **Kiểm thử đầy đủ trước khi báo cáo hoàn thành**:
    - Chạy `pytest -v` và `ruff check app tests` trong `poc/backend/` đạt **0 lỗi, 100% test pass**.
    - Chạy `npm run build` trong `poc/frontend/` xuất thành công thư mục tĩnh `poc/frontend/out/`.

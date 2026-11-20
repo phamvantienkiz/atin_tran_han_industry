@@ -1,5 +1,11 @@
 # PoC v001 — Hướng Dẫn Triển Khai Step-by-Step Lên Server `aiot`, Xem Qua Termius & Bàn Giao Port Public Cho Công Ty
 
+> [!IMPORTANT]
+> **Cập Nhật Quy Trình Triển Khai Chính Thức (Docker Compose Tại `poc/` — `https://tranhan.atin.vn/`)**:
+> - Toàn bộ hệ thống **ATIN Smart Fishing PoC v001** hiện đã được đóng gói hoàn chỉnh bằng **Multi-Stage Docker Compose ngay tại thư mục gốc `poc/`** ([poc/Dockerfile](file:///e:/ATIN/atin_tran_han_industry/poc/Dockerfile) + [poc/docker-compose.yml](file:///e:/ATIN/atin_tran_han_industry/poc/docker-compose.yml)) chạy trên cổng **`28080`** (đã được công ty mở Public ra **`https://tranhan.atin.vn/`**).
+> - Xem hướng dẫn vận hành Docker Compose ngắn gọn nhất tại: **[poc/docs/deploy.md](file:///e:/ATIN/atin_tran_han_industry/poc/docs/deploy.md)**.
+> - Tài liệu bên dưới ghi nhận cả quy trình chạy qua Docker Compose tại `poc/` lẫn quy trình chạy Native `.venv` dự phòng trên server `aiot`.
+
 > **Mục đích tài liệu**:
 > 1. Là cẩm nang **Step-by-Step thực chiến** để triển khai PoC v001 (FastAPI + Next.js Static Export 1-Port) lên server GPU **`aiot` (`192.168.1.170`, NVIDIA RTX A400 4GB VRAM)** ngay tại thư mục riêng **`tts@aiot:~/projects/tien$`**.
 > 2. **Yêu cầu bắt buộc đối với Hydrogen / Neon**: Sau khi viết xong code Backend + Frontend Next.js và vượt qua toàn bộ bài test ở local, **Hydrogen / Neon phải tạo sẵn script `poc/backend/scripts/run_server.sh` đúng chuẩn trong tài liệu này**, đồng thời kiểm tra lại toàn bộ các bước dưới đây để đảm bảo kỹ thuật viên chỉ cần copy-paste từng khối lệnh trên `tts@aiot:~/projects/tien$` là hệ thống chạy ngay 100%.

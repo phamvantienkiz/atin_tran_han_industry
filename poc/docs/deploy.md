@@ -67,9 +67,9 @@ SSH vào `tts@192.168.1.170` trên Termius:
 Vì hiện tại trên server đang chạy nền bằng `./scripts/run_server.sh start`, bạn gọi lệnh `./scripts/run_server.sh stop` **trước khi `git pull`** để dừng sạch nhóm tiến trình cũ và tránh xung đột quyền file khi pull:
 
 ```bash
-# 1. Dừng sạch server đang chạy nền bằng run_server.sh (nhả 100% port 28080 & VRAM)
+# 1. Dừng sạch server đang chạy nền bằng run_server.sh (dùng bash để không bao giờ bị lỗi Permission denied)
 cd ~/projects/tien/atin_tran_han_industry/poc/backend
-./scripts/run_server.sh stop
+bash scripts/run_server.sh stop
 ```
 ```bash
 # 2. Pull code mới nhất từ nhánh jin về

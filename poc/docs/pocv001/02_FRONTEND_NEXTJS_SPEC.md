@@ -207,10 +207,10 @@ export const detectionStore = new DetectionStore();
   3. **Vẽ Đa giác Vùng Giám Sát (Polygon)**:
      - Vẽ nền bán trong suốt + đường viền `2.5px` theo màu `ui_color`.
      - Vẽ các chấm tròn trắng `r = 3.5px` có viền `2px` màu `ui_color` tại tất cả các đỉnh đa giác.
-     - Vẽ **Polygon Tag Pill** tại đỉnh cao nhất (top-most vertex) của đa giác:
-       - Nền màu `ui_color`, chữ trắng in đậm `11px`, hiển thị `det.polygon_label` (ví dụ: `VÙNG MÁY TRỘN · 1 NV` / `VÙNG MÁY TRỘN · VỪA RỜI VÙNG` / `VÙNG MÁY TRỘN · TRỐNG` / `VÙNG MÁY TRỘN · KHÔNG CÓ NHÂN VIÊN`).
+     - Vẽ **Polygon Tag Pill** tại đỉnh cao nhất nằm ngoài vùng góc trên-trái của HUD (`px >= hudBoxW || py >= hudBoxH`) để không bao giờ bị khối HUD che khuất:
+       - Nền màu `ui_color`, chữ trắng in đậm `10.5px`, hiển thị `det.polygon_label` (ví dụ: `TĂNG TRỌNG 2 · 2 NV` / `TĂNG TRỌNG 2 · VỪA RỜI VÙNG` / `TĂNG TRỌNG 2 · TRỐNG` / `TĂNG TRỌNG 2 · KHÔNG CÓ NHÂN VIÊN`).
   4. **Vẽ Bounding Box Nhân Viên & Điểm Chân**:
-     - Kiểm tra chống bóng ma: chỉ vẽ BBox khi `Date.now() / 1000 - det.updated_at < 2.0`.
+     - Kiểm tra chống bóng ma (Anti-Ghosting không bị ảnh hưởng bởi lệch đồng hồ Server vs Client): đóng dấu `_client_ts = Date.now() / 1000` ngay khi trình duyệt nhận gói WebSocket và chỉ vẽ BBox khi `Date.now() / 1000 - (det._client_ts || det.updated_at) < 3.0`.
      - **Nếu `p.in_zone === true`**:
        - Viền `#22c55e` dày `2px`.
        - Nhãn pill nền `#22c55e` chữ trắng ở góc trên-trái box: `Nhân viên #${p.track_id ?? idx + 1}`.
@@ -226,15 +226,15 @@ export const detectionStore = new DetectionStore();
 ### 5.3. Luồng Tốc Độ Thấp ~1 Hz — `<ZoneHudOverlay />` & Viền Đỏ Cảnh Báo
 - Component `<ZoneHudOverlay cam={cam} compact={layoutCount >= 4} />` cũng subscribe vào `detectionStore.subscribeCamera(cam.id, ...)`, nhưng **chỉ gọi `setHudState(...)` khi chữ hiển thị hoặc màu sắc thực sự thay đổi** (so sánh `prev.status !== next.status || prev.ui_color !== next.ui_color || prev.sub_label !== next.sub_label || prev.alert_count !== next.alert_count || Math.floor(prev.total_alert_seconds) !== Math.floor(next.total_alert_seconds)`).
 - Nhờ vậy, React chỉ cập nhật DOM của HUD tối đa **1 lần mỗi giây** (khi đồng hồ `00:01 -> 00:02` nhảy số)!
-- **Giao diện `<ZoneHudOverlay />` khớp 100% với 3 ảnh mẫu của PM**:
-  - Đặt ở góc trên-trái trong `.viewport` (`position: absolute; top: 12px; left: 12px; z-index: 10; pointer-events: none;`).
-  - Nền `rgba(18, 22, 28, 0.80)`, `backdrop-filter: blur(8px)`, bo góc `12px`, thanh vạch màu `4px` bên trái đổi theo `green` (`#22c55e`), `yellow` (`#f59e0b`), `red` (`#ef4444`).
+- **Giao diện `<ZoneHudOverlay />` trong suốt & nhỏ gọn khớp với 3 ảnh mẫu của PM**:
+  - Đặt ở góc trên-trái trong `.viewport` (`position: absolute; top: 10px; left: 10px; z-index: 10; pointer-events: none;`).
+  - Nền trong suốt `rgba(15, 23, 42, 0.44)` (`--surface-hud`), `backdrop-filter: blur(3px)`, đổ bóng chữ `[text-shadow:0_1px_2px_rgba(0,0,0,0.85)]`, kích thước gọn (`max-w-[214px]` trên lưới 4/6 cam, `max-w-[262px]` khi phóng to), thanh vạch màu `3px` bên trái đổi theo `green` (`#22c55e`), `yellow` (`#f59e0b`), `red` (`#ef4444`) để nhìn xuyên thấu thấy rõ Poly Zone và công nhân phía sau.
   - **5 dòng thông tin chuẩn**:
     1. `GIÁM SÁT NHÂN VIÊN · ${(cam.zone_name || cam.name).toUpperCase()}`
     2. Chấm tròn màu + **`CÓ NHÂN VIÊN` / `VÙNG TRỐNG` / `KHÔNG CÓ NHÂN VIÊN`**
     3. Nhãn phụ: `1 người trong vùng` | `Vừa rời khỏi vùng` | `không có người 00:02` | `Cảnh báo · vùng trống 00:12`
-    4. Thống kê: `Tổng thời gian cảnh báo: ${formatMMSS(det.total_alert_seconds)} · Số lần cảnh báo: ${det.alert_count}`
-    5. Thanh **Dòng thời gian (30p gần nhất)**: hiển thị các đoạn `det.timeline` (`green / yellow / red`) theo tỷ lệ chiều rộng `(seg.end - seg.start) / totalSpan * 100%`.
+    4. Thống kê: `Tổng cảnh báo: ${formatMMSS(det.total_alert_seconds)} · Số lần: ${det.alert_count}`
+    5. Thanh **Timeline (30p)**: hiển thị các đoạn `det.timeline` (`green / yellow / red`) theo tỷ lệ chiều rộng `(seg.end - seg.start) / totalSpan * 100%`.
 - **Viền đỏ toàn khung Viewport khi `ui_color === 'red'`**:
   - Khi trạng thái là `alert` (`ui_color === 'red'`), khung `.viewport` của thẻ camera (và `.focus-viewport` trong Focus Modal) bật viền đỏ nổi bật: `box-shadow: inset 0 0 0 3px #ef4444, 0 0 16px rgba(239, 68, 68, 0.35)`.
 
@@ -245,7 +245,7 @@ export const detectionStore = new DetectionStore();
 Ngoài phần nâng cấp Live View + HUD + Dual-Speed Canvas ở trên, ứng dụng Next.js phải giữ đầy đủ mọi tính năng đang có trong `poc/frontend/`:
 
 1. **Thanh Topbar**:
-   - Tên thương hiệu `ATIN Trần Hân` + phụ đề `Live view nhà máy thủy sản`.
+   - Tên thương hiệu **`ATIN Smart Fishing`** + phụ đề `Giám sát AI nhà máy thủy sản`.
    - Pill trạng thái kết nối NVR (`nmts2025.smartddns.tv` — chấm xanh online / đỏ offline).
    - Segmented control chuyển tab: **`Live view`** ↔ **`Video & Tách frame`**.
    - Pill báo hiệu toàn cục khi có phiên đang ghi hình (`Đang ghi CH 16 · còn 04:12`).

@@ -20,6 +20,7 @@
 | **ISS-09** | GPU CUDA `aiot` | `onnxruntime-gpu==1.32.0` đòi CUDA 13 (`libcublasLt.so.13`), fallback về CPU | `ec17460` · `pyproject.toml`, `run_server.sh` | Đã fix |
 | **ISS-10** | Vận hành `aiot` | `*.onnx` bị `.gitignore` chặn khi push & lỗi xuống dòng khi paste lệnh dài | `poc/docs/deploy.md` | Đã ghi nhận |
 | **ISS-11** | AI & Live View | `yolo26s_best.onnx` cũ là model PPE 7 class (không có `person`) + lỗi `Clock Skew` ẩn BBox trên trình duyệt & HUD che Polygon | `detector.py`, `config.py`, `detection-store.ts`, `CameraOverlayCanvas.tsx`, `ZoneHudOverlay.tsx`, `Dockerfile`, `docker-compose.yml` | Đã fix |
+| **ISS-12** | Docker CUDA `aiot` | `/usr/bin/python3: No module named uvicorn` trong `nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04` & `Permission denied` khi chạy `./scripts/run_server.sh stop` sau `git pull` | `c7592a0` · `poc/Dockerfile`, `poc/backend/pyproject.toml`, `common.py`, `deploy.md` | Đã fix |
 
 ---
 
@@ -173,4 +174,26 @@
   1. Cập nhật [config.py](file:///e:/ATIN/atin_tran_han_industry/poc/backend/app/core/config.py) & [detector.py](file:///e:/ATIN/atin_tran_han_industry/poc/backend/app/ai/detector.py) ưu tiên nạp `poc/models/yolo26s.onnx` (`{0: 'person'}`) và log rõ danh sách `classes` khi khởi tạo.
   2. Cập nhật [detection-store.ts](file:///e:/ATIN/atin_tran_han_industry/poc/frontend/src/lib/detection-store.ts) đóng dấu `_client_ts = Date.now() / 1000` ngay khi trình duyệt nhận gói WebSocket và dùng `_client_ts` trong [CameraOverlayCanvas.tsx](file:///e:/ATIN/atin_tran_han_industry/poc/frontend/src/components/CameraOverlayCanvas.tsx) để triệt tiêu 100% lỗi lệch đồng hồ.
   3. Tăng độ trong suốt của HUD (`rgba(15, 23, 42, 0.44)`, `backdrop-blur-[3px]`) và thu gọn kích thước HUD trong [ZoneHudOverlay.tsx](file:///e:/ATIN/atin_tran_han_industry/poc/frontend/src/components/ZoneHudOverlay.tsx) để nhìn xuyên thấu rõ ràng vùng Polygon và nhân viên phía sau; tự động chọn đỉnh Polygon ngoài vùng HUD để đặt nhãn Pill.
-  4. Bổ sung Multi-stage [Dockerfile](file:///e:/ATIN/atin_tran_han_industry/poc/backend/Dockerfile) + [docker-compose.yml](file:///e:/ATIN/atin_tran_han_industry/poc/backend/docker-compose.yml) (Node 20 build Next.js + `nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04` chạy FastAPI & `onnxruntime-gpu` trên đúng cổng `28080`) và tích hợp lệnh `./scripts/run_server.sh docker` / `./scripts/run_server.sh stop` để cô lập môi trường 100%.
+  4. Bổ sung Multi-stage [Dockerfile](file:///e:/ATIN/atin_tran_han_industry/poc/Dockerfile) + [docker-compose.yml](file:///e:/ATIN/atin_tran_han_industry/poc/docker-compose.yml) ngay tại thư mục gốc `poc/` (Node 20 build Next.js + `nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04` chạy FastAPI & `onnxruntime-gpu` trên đúng cổng `28080`) để cô lập môi trường 100%.
+
+---
+
+### ISS-12: Lỗi `/usr/bin/python3: No module named uvicorn` trong container CUDA 12.4 & lỗi `Permission denied` khi dừng script cũ sau `git pull`
+- **Giai đoạn**: Chuyển từ bản chạy `.sh` sang chạy `docker compose up -d --build` tại `poc/` trên server `aiot`.
+- **Log / Hiện tượng**:
+  1. Trước khi bật Docker, chạy `./scripts/run_server.sh stop` sau khi vừa `git pull` báo `-bash: ./scripts/run_server.sh: Permission denied` (do file commit từ Windows có mode `644`).
+  2. Sau khi `docker compose up -d --build`, log container `tranhan_ai_poc` lặp lại:
+     ```text
+     /usr/bin/python3: No module named uvicorn
+     tranhan_ai_poc exited with code 1 (restarting)
+     ```
+- **Nguyên nhân gốc**:
+  1. Image `nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04` xây trên Ubuntu 22.04 nên `/usr/bin/python3` là **Python `3.10.12`**, trong khi `poc/backend/pyproject.toml` khai báo `requires-python = ">=3.11"` và `app/schemas/common.py` import `from datetime import UTC` (chỉ có từ Python 3.11).
+  2. Trong `Dockerfile`, chuỗi lệnh `RUN python3 -m pip install . && ... && python3 -m pip uninstall -y opencv-python onnxruntime || true` đặt `|| true` ở cuối chuỗi `&&`, khiến khi `pip install .` báo lỗi lệch phiên bản Python `3.10.12 not in '>=3.11'`, toàn bộ chuỗi `&&` bị nhảy qua nhưng vẫn trả về exit code `0` (build image thành công giả mà chưa cài `uvicorn`).
+- **Cách fix** (Commit `c7592a0`):
+  1. Dùng `bash scripts/run_server.sh stop` khi cần dừng tiến trình `.sh` cũ để không phụ thuộc quyền `+x`.
+  2. Hạ `requires-python = ">=3.10"` trong [pyproject.toml](file:///e:/ATIN/atin_tran_han_industry/poc/backend/pyproject.toml#L5) và đổi `datetime.UTC` sang `timezone.utc` trong [common.py](file:///e:/ATIN/atin_tran_han_industry/poc/backend/app/schemas/common.py#L5) để tương thích hoàn toàn với Python 3.10 của Ubuntu 22.04.
+  3. Trong [poc/Dockerfile](file:///e:/ATIN/atin_tran_han_industry/poc/Dockerfile#L38-L43), bọc riêng `(python3 -m pip uninstall -y opencv-python onnxruntime || true)` trong ngoặc đơn và thêm bước kiểm tra bắt buộc ngay lúc build image:
+     ```dockerfile
+     && python3 -c "import uvicorn, fastapi, cv2, onnxruntime, supervision, app.main; print('Verified app.main & runtime imports OK:', onnxruntime.get_available_providers())"
+     ```
