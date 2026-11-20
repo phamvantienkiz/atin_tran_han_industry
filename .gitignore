@@ -229,6 +229,7 @@ customers/
 docs/ai/
 docs/note/
 poc/docs/linkcam.md
+poc/docs/temp.md
 poc/report/
 app_log_tail.txt
 .vscode/

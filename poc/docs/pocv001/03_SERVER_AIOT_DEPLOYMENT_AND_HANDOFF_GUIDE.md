@@ -19,9 +19,31 @@
 | **SSH Host & User** | `tts@192.168.1.170` (Hostname: `aiot`, Ubuntu 22.04.5 LTS) |
 | **Thư mục đứng chân của Tiến** | `tts@aiot:~/projects/tien$` (`/home/tts/projects/tien`) |
 | **Thư mục dự án sau khi clone** | `/home/tts/projects/tien/atin_tran_han_industry` |
-| **GPU & Giới hạn VRAM PoC** | NVIDIA RTX A400 (**4 GB VRAM**) — Giới hạn PoC `<= 1024 MB` |
+| **GPU & Giới hạn VRAM PoC** | NVIDIA RTX A400 (**4 GB VRAM**) — Giới hạn PoC `AI_VRAM_LIMIT_MB=1536` |
 | **Port chạy PoC (1 Port duy nhất)** | Mặc định **`28080`** (đổi linh hoạt qua biến `PORT` trong `poc/backend/.env`) |
 | **Nguồn Camera Trần Hân** | `nmts2025.smartddns.tv:80` · User: `user` · Pass: `testcam@123` (Kênh 16, 17, 18, 21) |
+
+---
+
+## 1.1. Quy Trình Triển Khai Chính Thức Bằng Docker Compose (BuildKit)
+
+Tại thư mục `poc/` trên server `aiot` (`~/projects/tien/atin_tran_han_industry/poc`):
+
+```bash
+git pull origin feat/pocv001
+DOCKER_BUILDKIT=1 docker compose --progress plain build
+docker compose up -d
+```
+
+Kiểm tra nhanh GPU & logs sau khi container `tranhan_ai_poc` khởi động:
+
+```bash
+docker compose exec -T tranhan-poc nvidia-smi
+docker compose logs --tail=50 | grep -E "active_provider|METRICS"
+curl -s http://127.0.0.1:28080/api/v1/health
+```
+
+> Lưu ý: `poc/Dockerfile` sử dụng `poc/backend/requirements/docker.txt` với BuildKit cache mount (`/root/.npm`, `/build/frontend/.next/cache`, `/root/.cache/pip`) giúp các lần rebuild chỉ sửa code `backend/app/` hoặc `frontend/` diễn ra nhanh chóng mà không phải tải lại thư viện CUDA/ONNX.
 
 ---
 

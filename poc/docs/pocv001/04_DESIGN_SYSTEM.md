@@ -315,7 +315,7 @@ Theo yêu cầu của `ds-atin1.md` & `ds-atin2.md`, mọi component phải đ�
   │    - Lớp 2: <img class="zone-bg"> (Snapshot tĩnh khi vẽ vùng)   │
   │    - Lớp 3: <ZoneHudOverlay /> (Góc trên-trái, 3 màu + Timeline)│
   │    - Lớp 4: <CameraOverlayCanvas /> (HiDPI Polygon + BBox 15FPS)│
-  │    - Lớp 5: Stream Badge góc trên-phải (Trực tiếp / Mất tín hiệu)│
+  │    - Lớp 5: Stream Badge góc trên-phải (chỉ hiển thị khi tạm dừng hoặc `connecting`/`error`; ẩn `"Trực tiếp"` lúc live bình thường để giữ khung hình sạch)│
   ├─────────────────────────────────────────────────────────────────┤
   │ 4. Metric Row (3 cột thoáng, không vách ngăn dọc):               │
   │    Kênh: CH 16     | Luồng: MJPEG · Chính | Độ trễ: 142 ms      │
@@ -360,13 +360,14 @@ Theo yêu cầu của `ds-atin1.md` & `ds-atin2.md`, mọi component phải đ�
     - Đỉnh đa giác: chấm tròn bán kính `3.5px`, nền `#FFFFFF`, viền `2px` màu `ui_color`.
     - **Polygon Tag Pill** tại đỉnh cao nhất: khung chữ nhật bo góc `4px`, nền màu `ui_color`, chữ trắng `600 11px Inter`, nội dung `{TÊN VÙNG} · {TRẠNG THÁI NGẮN}`.
   - **Bounding Box Nhân Viên**:
-    - **Trong vùng (`in_zone === true`)**: Viền `#22C55E` dày `2px`; nhãn pill nền `#22C55E` chữ `#FFFFFF` (`600 11px Inter`) ghi `Nhân viên #{track_id}`; điểm chân `(foot_x, foot_y)` vẽ hình tròn `r = 4.5px` nền `#22C55E` viền trắng `2px`.
-    - **Ngoài vùng (`in_zone === false`)**: Đặt `ctx.globalAlpha = 0.42`, viền `#94A3B8` dày `1.25px`, nhãn nhỏ nền `#334155` chữ trắng ghi `#{track_id}`, chấm chân `r = 3px` màu `#94A3B8`.
+    - **Trong vùng (`in_zone === true`)**: Viền `#22C55E` dày `2px`; nhãn pill nền `#16A34A` chữ `#FFFFFF` (`600 11px Inter`) hiển thị độ tin cậy `{conf}%`.
+    - **Ngoài vùng (`in_zone === false`)**: Đặt `ctx.globalAlpha = 0.42`, viền `#94A3B8` dày `1.25px`, nhãn nhỏ nền `#334155` chữ trắng ghi `{conf}%`. Không vẽ chấm tròn anchor.
 
 #### E. Hộp Thoại Phóng To (`<FocusModal />`) & Hộp Thoại Cài Đặt (`<CameraFormModal />`)
-- **Anatomy**:
+- **FocusModal**: Chế độ xem toàn màn hình (`requestFullscreen()` với fallback viewport `w-screen h-screen bg-black`), khung 16:9 tối giản chỉ gồm video (`subtype=0&view=focus`), `CameraOverlayCanvas`, `ZoneHudOverlay`, nút đóng `X` và phím `Esc`.
+- **CameraFormModal**:
   - Lớp nền mờ: `fixed inset-0 z-50 bg-slate-900/55 backdrop-blur-xs flex items-center justify-center p-4`.
-  - Thẻ Modal: `bg-surface-card border border-line rounded-card shadow-2xl w-full max-h-[92vh] flex flex-col overflow-hidden` (`max-w-5xl` cho FocusModal, `max-w-lg` cho CameraFormModal).
+  - Thẻ Modal: `bg-surface-card border border-line rounded-card shadow-2xl w-full max-w-lg max-h-[92vh] flex flex-col overflow-hidden`.
 - **Keyboard & Pointer**:
   - Nhấn phím `Escape` hoặc click vào vùng nền mờ bên ngoài thẻ để đóng Modal.
   - Mọi ô `<input>`, `<select>`, `<textarea>` trong `CameraFormModal` bắt buộc nằm trong thẻ `<label>` rõ ràng với nhãn tiếng Việt phía trên (`text-[12px] font-medium text-content-secondary mb-1.5`), chiều cao ô nhập `h-10 px-3 rounded-md border border-line bg-surface-subtle text-content-heading focus:bg-white focus:border-brand-primary`.

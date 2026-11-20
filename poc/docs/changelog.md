@@ -4,6 +4,28 @@ Tài liệu ghi nhận toàn bộ lịch sử thay đổi, nâng cấp kiến tr
 
 ---
 
+## [0.2.2] - 2026-11-20 — Optimization v4 (Zero-Wait MJPEG), GridFrameCache, SQLite WAL & Docker BuildKit
+
+### Added
+- **Tối ưu hiệu năng & Streaming (`GridFrameCache`, `Auto-FP16`, `JIT Overlap Prefetch`)**:
+  - `poc/backend/app/ai/grid_cache.py`: Cache JPEG theo nhu cầu (demand-driven) dành riêng cho Grid View (`854px`, `Q=68`, `X-Stream-Source: ram-grid-cache`), giải phóng băng thông và CPU khỏi asyncio event loop; Focus View giữ passthrough trực tiếp `ram-direct`.
+  - `PersonZoneDetector` (`worker.py`): JIT fetch + 1-cam overlap prefetch (`ThreadPoolExecutor(max_workers=1)`), skip AI với camera chưa vẽ zone.
+  - `YoloPersonDetector` (`detector.py`): Tự động nhận diện input dtype FP16/FP32 từ ONNX và warmup pass; `AI_VRAM_LIMIT_MB=1536`.
+  - Endpoint `GET /api/v1/metrics` và script `scripts/export_app_logs.py`, `scripts/probe_nvr.py`, `scripts/bench_decode.py`, `scripts/bench_infer.py`.
+- **Lưu trữ SQLite WAL (`poc/backend/app/db/sqlite_store.py`, `sqlite_camera_repository.py`)**:
+  - Chuyển cấu hình camera, lịch sử cảnh báo (`alert_events`, retention 90 ngày) và `runtime_snapshots` sang SQLite WAL (`tranhan_poc.db`) với async writer thread, tự migrate từ `cameras.json`.
+- **Docker BuildKit Layer Caching (`poc/Dockerfile`, `poc/backend/requirements/docker.txt`, `poc/.dockerignore`)**:
+  - Tách manifest `requirements/docker.txt` (`onnxruntime-gpu==1.23.2`, `opencv-python-headless==5.1.0.95`, `supervision==0.27.0.post2`) và cài đặt trước khi copy `app/`/`scripts/`, dùng cache mount BuildKit cho `npm`, `.next/cache` và `pip`.
+
+### Changed & Fixed
+- **Zero-Wait MJPEG & Tách WebSocket (`ws_hub.py`, `ws-client.ts`, `detection-store.ts`)**: Tách message `bbox` (tức thì) và `hud`/`timeline` (`1s`/`2s`), coalescing latest-wins ở server; nâng `BBOX_STALE_SECONDS=1.8`.
+- **Tinh chỉnh AI & Giao diện Live View (`config.py`, `CameraOverlayCanvas.tsx`, `CameraCard.tsx`, `FocusModal.tsx`)**:
+  - Đặt mặc định `AI_CONF_THRESHOLD=0.55`, `AI_ANCHOR_MODE=center`.
+  - BBox trong vùng xanh lá (`#22C55E`), ngoài vùng xám (`#94A3B8`, `globalAlpha=0.42`, `1.25px`) kèm nhãn `%` độ tin cậy, ẩn chấm tròn anchor.
+  - Ẩn badge `"Trực tiếp"` trên `CameraCard` khi đang live bình thường; bỏ xóa `img.src` khi unmount tránh lỗi stream giả; ngắt MJPEG khi mở Zone Editor; nâng cấp `FocusModal` sang Fullscreen API (`requestFullscreen()`).
+
+---
+
 ## [0.2.1] - 2026-11-20 — Model Công Nhân Nhà Máy Mới, Sửa Lỗi Ẩn BBox, HUD Trong Suốt & Đóng Gói Docker Tại `poc/`
 
 ### Added
