@@ -53,12 +53,12 @@ class Settings(BaseSettings):
     AI_RUNTIME: str = "auto"  # auto | onnx_cuda | cpu
     AI_EP: str = "auto"  # auto | cuda | cpu (never TensorRT)
     AI_VRAM_LIMIT_MB: int = 1536
-    AI_CONF_THRESHOLD: float = 0.40
+    AI_CONF_THRESHOLD: float = 0.55
     AI_IMGSZ: int = 640
     AI_DECODE_REDUCE: int = 1  # 1 = full IMREAD_COLOR, 2 = IMREAD_REDUCED_COLOR_2
     AI_SNAP_MIN_IOU: float = 0.25
     AI_TARGET_FPS: float = 0.0  # 0 = run as fast as GPU allows
-    AI_ANCHOR_MODE: str = "bottom_center"  # bottom_center | center
+    AI_ANCHOR_MODE: str = "center"  # bottom_center | center
     AI_PRESENCE_GRACE_SECONDS: float = 2.0
     AI_PRESENCE_WARNING_SECONDS: float = 10.0
     AI_TIMELINE_WINDOW_SECONDS: int = 1800

@@ -30,6 +30,35 @@ interface CameraCardProps {
 
 type StreamHealth = 'connecting' | 'live' | 'error';
 
+function LatencyOverlay({ camId }: { camId: string }) {
+  const spanRef = useRef<HTMLSpanElement | null>(null);
+
+  useEffect(() => {
+    let lastUpdated = 0;
+    let lastText = '';
+    const unsub = detectionStore.subscribeBbox(camId, (det) => {
+      if (!det) return;
+      const now = Date.now();
+      if (now - lastUpdated < 1000) return;
+      lastUpdated = now;
+      const ms = det.delay_ms ?? det.inference_ms ?? null;
+      const nextText = ms !== null ? `${ms} ms` : '';
+      if (nextText !== lastText && spanRef.current) {
+        lastText = nextText;
+        spanRef.current.textContent = nextText;
+      }
+    });
+    return () => unsub();
+  }, [camId]);
+
+  return (
+    <span
+      ref={spanRef}
+      className="absolute bottom-2 right-2.5 z-10 pointer-events-none select-none text-[11px] font-medium text-white tabular-nums [text-shadow:0_1px_2px_rgba(0,0,0,0.9)]"
+    />
+  );
+}
+
 export function CameraCard({
   cam,
   compact,
@@ -42,7 +71,6 @@ export function CameraCard({
 }: CameraCardProps) {
   const [streamHealth, setStreamHealth] = useState<StreamHealth>('connecting');
   const [streamTick, setStreamTick] = useState<number>(() => Date.now());
-  const [latencyMs, setLatencyMs] = useState<number | null>(null);
   const [isAlert, setIsAlert] = useState(false);
   const [inViewport, setInViewport] = useState(true);
   const [tabHidden, setTabHidden] = useState(false);
@@ -86,20 +114,6 @@ export function CameraCard({
     }
     return undefined;
   }, []);
-
-  // Read inference/delay latency from bbox store (replaces 30s probeCamera polling)
-  useEffect(() => {
-    let lastUpdated = 0;
-    const unsub = detectionStore.subscribeBbox(cam.id, (det) => {
-      if (!det) return;
-      const now = Date.now();
-      if (now - lastUpdated < 1000) return;
-      lastUpdated = now;
-      const ms = det.delay_ms ?? det.inference_ms ?? null;
-      if (ms !== null) setLatencyMs(ms);
-    });
-    return () => unsub();
-  }, [cam.id]);
 
   // Snapshot polling mode when cam.mode === 'snapshot'
   useEffect(() => {
@@ -196,11 +210,6 @@ export function CameraCard({
         ? `/api/v1/cameras/${encodeURIComponent(cam.id)}/snapshot.jpg?t=${streamTick}`
         : `/api/v1/cameras/${encodeURIComponent(cam.id)}/mjpeg?subtype=${cam.subtype}&view=grid&t=${streamTick}`;
 
-  const streamModeLabel =
-    cam.mode === 'snapshot'
-      ? 'Snapshot'
-      : `MJPEG · ${cam.subtype === 0 ? 'Chính' : 'Phụ'}`;
-
   return (
     <article
       ref={cardRef}
@@ -208,25 +217,8 @@ export function CameraCard({
         isAlert && !editingZone ? 'border-status-alert/60' : 'border-line'
       }`}
     >
-      {/* Tier 1: Header */}
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <h3
-            className="text-[16px] font-semibold text-content-heading leading-snug truncate"
-            title={cam.name}
-          >
-            {cam.name}
-          </h3>
-          <p
-            className="text-[12px] text-content-secondary truncate mt-0.5"
-            title={cam.note || `Kênh ${cam.channel}`}
-          >
-            Kênh {cam.channel}
-            {cam.note ? ` · ${cam.note}` : ''}
-          </p>
-        </div>
-
-        <div className="flex items-center gap-1.5 shrink-0">
+      {/* Tier 1: Header (action icons only) */}
+      <div className="flex items-center justify-end gap-1.5">
           <button
             type="button"
             onClick={() => onFocus(cam)}
@@ -270,7 +262,6 @@ export function CameraCard({
           >
             <Settings className="w-4 h-4" strokeWidth={1.5} />
           </button>
-        </div>
       </div>
 
       {/* Tier 2: Conditional Zone Editor Toolbar */}
@@ -396,6 +387,9 @@ export function CameraCard({
           </div>
         )}
 
+        {/* Layer 5b: Bottom-right Latency (0 React re-renders, no background) */}
+        {!editingZone && <LatencyOverlay camId={cam.id} />}
+
         {/* Stream Error Overlay */}
         {!editingZone && !streamPaused && streamHealth === 'error' && (
           <div className="absolute inset-0 z-20 bg-slate-950/85 flex flex-col items-center justify-center gap-3 p-4 text-center">
@@ -412,28 +406,6 @@ export function CameraCard({
             </button>
           </div>
         )}
-      </div>
-
-      {/* Tier 4: Metric Row (3 clean columns, no heavy dividers) */}
-      <div className="grid grid-cols-3 gap-2 pt-0.5 text-[12px]">
-        <div className="min-w-0">
-          <div className="text-[11px] text-content-muted">Kênh</div>
-          <div className="text-[13px] font-medium text-content-primary tabular-nums truncate">
-            CH {cam.channel}
-          </div>
-        </div>
-        <div className="min-w-0">
-          <div className="text-[11px] text-content-muted">Luồng</div>
-          <div className="text-[13px] font-medium text-content-primary truncate">
-            {streamModeLabel}
-          </div>
-        </div>
-        <div className="min-w-0 text-right">
-          <div className="text-[11px] text-content-muted">Độ trễ</div>
-          <div className="text-[13px] font-medium text-content-primary tabular-nums truncate">
-            {latencyMs !== null ? `${latencyMs} ms` : '—'}
-          </div>
-        </div>
       </div>
     </article>
   );

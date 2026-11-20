@@ -204,14 +204,12 @@ export function CameraOverlayCanvas({
     const ageSec = Date.now() / 1000 - refTs;
     if (ageSec > detectionStore.getBboxStaleSeconds()) return;
 
-    // 4. Draw person BBoxes (in-zone prominent green vs outside-zone dimmed slate)
+    // 4. Draw person BBoxes (in-zone prominent green vs outside-zone blue)
     det.persons.forEach((p, idx) => {
       const bx1 = p.x1 * w;
       const by1 = p.y1 * h;
       const bw = Math.max(2, (p.x2 - p.x1) * w);
       const bh = Math.max(2, (p.y2 - p.y1) * h);
-      const footX = (p.foot_x ?? p.cx) * w;
-      const footY = (p.foot_y ?? p.y2) * h;
       const trackLabelId = p.track_id ?? idx + 1;
 
       ctx.save();
@@ -239,19 +237,10 @@ export function CameraOverlayCanvas({
         ctx.fillStyle = '#FFFFFF';
         ctx.textBaseline = 'middle';
         ctx.fillText(label, lx + padX, ly + lh / 2 + 0.5);
-
-        // Foot anchor dot
-        ctx.beginPath();
-        ctx.arc(footX, footY, 4.5, 0, Math.PI * 2);
-        ctx.fillStyle = '#22C55E';
-        ctx.fill();
-        ctx.lineWidth = 2;
-        ctx.strokeStyle = '#FFFFFF';
-        ctx.stroke();
       } else {
-        ctx.globalAlpha = 0.42;
-        ctx.strokeStyle = '#94A3B8';
-        ctx.lineWidth = 1.25;
+        ctx.globalAlpha = p.predicted ? 0.55 : 0.85;
+        ctx.strokeStyle = '#3B82F6';
+        ctx.lineWidth = 1.5;
         ctx.strokeRect(bx1, by1, bw, bh);
 
         const label = `#${trackLabelId}`;
@@ -264,16 +253,11 @@ export function CameraOverlayCanvas({
         const ly = by1 >= lh + 4 ? by1 - lh - 2 : by1 + 2;
 
         drawRoundedRect(ctx, lx, ly, lw, lh, 4);
-        ctx.fillStyle = '#334155';
+        ctx.fillStyle = '#2563EB';
         ctx.fill();
         ctx.fillStyle = '#FFFFFF';
         ctx.textBaseline = 'middle';
         ctx.fillText(label, lx + padX, ly + lh / 2 + 0.5);
-
-        ctx.beginPath();
-        ctx.arc(footX, footY, 3, 0, Math.PI * 2);
-        ctx.fillStyle = '#94A3B8';
-        ctx.fill();
       }
       ctx.restore();
     });
