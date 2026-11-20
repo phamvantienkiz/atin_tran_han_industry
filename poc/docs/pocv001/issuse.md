@@ -21,6 +21,7 @@
 | **ISS-10** | Vận hành `aiot` | `*.onnx` bị `.gitignore` chặn khi push & lỗi xuống dòng khi paste lệnh dài | `poc/docs/deploy.md` | Đã ghi nhận |
 | **ISS-11** | AI & Live View | `yolo26s_best.onnx` cũ là model PPE 7 class (không có `person`) + lỗi `Clock Skew` ẩn BBox trên trình duyệt & HUD che Polygon | `detector.py`, `config.py`, `detection-store.ts`, `CameraOverlayCanvas.tsx`, `ZoneHudOverlay.tsx`, `Dockerfile`, `docker-compose.yml` | Đã fix |
 | **ISS-12** | Docker CUDA `aiot` | `/usr/bin/python3: No module named uvicorn` trong `nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04` & `Permission denied` khi chạy `./scripts/run_server.sh stop` sau `git pull` | `c7592a0` · `poc/Dockerfile`, `poc/backend/pyproject.toml`, `common.py`, `deploy.md` | Đã fix |
+| **ISS-13** | Perf & Docker Build | Rebuild Docker chậm (~4–5 phút khi sửa code), `CameraCard` xóa `img.src` gây báo lỗi stream giả, nghẽn socket khi mở Zone Editor | `2a2ced2`, `8bb96c7`, `932f1e5` · `poc/Dockerfile`, `docker.txt`, `.dockerignore`, `CameraCard.tsx` | Đã fix |
 
 ---
 
@@ -197,3 +198,15 @@
      ```dockerfile
      && python3 -c "import uvicorn, fastapi, cv2, onnxruntime, supervision, app.main; print('Verified app.main & runtime imports OK:', onnxruntime.get_available_providers())"
      ```
+
+---
+
+### ISS-13: Rebuild Docker chậm, lỗi stream giả khi ẩn tab (`img.src`), nghẽn socket khi vẽ Zone
+- **Giai đoạn**: Tối ưu hiệu năng Live View & Docker Build trên `aiot`.
+- **Hiện tượng**:
+  1. Mỗi lần sửa vài dòng code Python trong `poc/backend/app/`, chạy `docker compose build` mất ~4–5 phút vì `COPY backend ./backend` nằm trước `pip install`, làm mất toàn bộ cache layer thư viện CUDA/ONNX.
+  2. Khi chuyển tab hoặc cuộn trang, `CameraCard.tsx` gán `img.src = ''` khiến trình duyệt bắn `onError` giả và hiện thông báo `"Mất kết nối"` dù stream vẫn sống.
+  3. Khi mở Zone Editor trên Grid 4–6 cam, luồng MJPEG đang mở chiếm hết giới hạn 6 kết nối HTTP/1.1 của trình duyệt làm `/snapshot.jpg?direct=true` và `PUT /zone` bị treo chờ socket.
+- **Cách fix**:
+  1. **Docker BuildKit (`932f1e5`)**: Tách `poc/backend/requirements/docker.txt`, copy `docker.txt` và `pip install` (kèm `--mount=type=cache,target=/root/.cache/pip`) **trước** khi copy `backend/app/` và `backend/scripts/`; xử lý `supervision` kéo `opencv-python` bằng cách gỡ `opencv-python` và cài `opencv-python-headless==5.1.0.95` (`--no-deps --force-reinstall`), bổ sung `.dockerignore` loại `data/`, `models/`, `storages/`, `docs/`.
+  2. **CameraCard (`8bb96c7`, `2a2ced2`)**: Loại bỏ việc xóa `img.src = ''` khi cleanup; ngắt luồng MJPEG khi `editingZone === true` để nhường socket cho ảnh nền vẽ vùng và lưu zone.

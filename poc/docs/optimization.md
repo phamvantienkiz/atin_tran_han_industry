@@ -1,6 +1,6 @@
 # PoC v001 — Kế Hoạch Tối Ưu Hiệu Năng (Optimization Plan) — v4 (Ưu Tiên Tuyệt Đối Video Live View Mượt, Sửa Ít Nhất Có Thể)
 
-> **Người thực hiện**: Hydrogen / Neon. Tài liệu chỉ mô tả thiết kế + kế hoạch chỉnh sửa tối giản; không tự ý thực hiện implement trong bước này.
+> **Trạng thái**: **ĐÃ TRIỂN KHAI & HOÀN TẤT** (Commit `e06a6fd`, `143b0cc`, `c7592a7`, `932f1e5`). Ngoài kiến trúc *Video Zero-Wait, AI Best-Effort* bên dưới, hệ thống đã bổ sung thêm `GridFrameCache` (`ram-grid-cache`, `854px`, `Q=68`) cho Grid View và `1-cam overlap prefetch` cho GPU AI.
 > **Mục tiêu cốt lõi của v4 (theo yêu cầu mới nhất của PM)**:
 > - **Đưa Video Live View trở lại mượt mà, ổn định tuyệt đối**, không bao giờ bị giật khung hình.
 > - **Tách rời hoàn toàn (100% Decoupled)** đường phát Video MJPEG ra khỏi đường AI / Pacer / Van xả: Video đến từ NVR là đẩy thẳng tới trình duyệt ngay lập tức.

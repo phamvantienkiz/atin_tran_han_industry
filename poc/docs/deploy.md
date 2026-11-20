@@ -19,7 +19,7 @@
 | **Thư mục đứng chạy Docker** | **`~/projects/tien/atin_tran_han_industry/poc`** |
 | **File cấu hình Docker** | `poc/Dockerfile`, `poc/docker-compose.yml`, `poc/.dockerignore` |
 | **Tên Container** | `tranhan_ai_poc` |
-| **GPU & Giới hạn VRAM** | NVIDIA RTX A400 (**4 GB VRAM**) — Container giới hạn **`AI_VRAM_LIMIT_MB=1024`** (~400 MB thực tế) |
+| **GPU & Giới hạn VRAM** | NVIDIA RTX A400 (**4 GB VRAM**) — Container giới hạn **`AI_VRAM_LIMIT_MB=1536`** (~202 MiB thực tế) |
 | **Port dịch vụ duy nhất** | **`28080:28080`** (Ăn khớp trực tiếp với **`https://tranhan.atin.vn/`**) |
 | **Model AI sử dụng** | `poc/models/yolo26s.onnx` (Fine-tune `factory_person_dataset`, `names = {0: 'person'}`) |
 | **NVR Trần Hân (DDNS)** | `nmts2025.smartddns.tv:80` · User: `user` · Pass: `testcam@123` (Kênh `16, 17, 18, 21`) |
@@ -110,16 +110,19 @@ NVR_HOST=nmts2025.smartddns.tv
 NVR_PORT=80
 NVR_USER=user
 NVR_PASS=testcam@123
-NVR_STREAM_FPS_LIMIT=12.0
+NVR_STREAM_FPS_LIMIT=0.0
 
 AI_ENABLED=true
 MODEL_PATH=../models/yolo26s.onnx
 AI_RUNTIME=auto
-AI_VRAM_LIMIT_MB=1024
-AI_CONF_THRESHOLD=0.40
+AI_VRAM_LIMIT_MB=1536
+AI_CONF_THRESHOLD=0.55
+AI_ANCHOR_MODE=center
+DB_BACKEND=sqlite
+DB_PATH=../data/tranhan_poc.db
 AI_IMGSZ=640
-AI_TARGET_FPS=12.0
-AI_ANCHOR_MODE=bottom_center
+AI_TARGET_FPS=0.0
+AI_ANCHOR_MODE=center
 AI_PRESENCE_GRACE_SECONDS=2.0
 AI_PRESENCE_WARNING_SECONDS=10.0
 AI_TIMELINE_WINDOW_SECONDS=1800
@@ -152,7 +155,8 @@ docker info | grep -i nvidia || true
 
 ```bash
 cd ~/projects/tien/atin_tran_han_industry/poc
-docker compose up -d --build
+DOCKER_BUILDKIT=1 docker compose --progress plain build
+docker compose up -d
 ```
 
 - Container `tranhan_ai_poc` sẽ tự động:

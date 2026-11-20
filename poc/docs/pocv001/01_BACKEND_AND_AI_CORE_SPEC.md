@@ -8,26 +8,21 @@
 
 | Trạng thái | Đường dẫn file | Mô tả nhiệm vụ |
 | :---: | :--- | :--- |
-| **[MODIFY]** | `poc/backend/pyproject.toml` | Thêm `supervision>=0.25.0`, và nhóm optional `[gpu]` (`onnxruntime-gpu`, `onnx`, `onnxconverter-common`). |
+| **[MODIFY]** | `poc/backend/pyproject.toml` | `requires-python = ">=3.10"`, `supervision>=0.25.0,<0.28.0`, và nhóm optional `[gpu]` (`onnxruntime-gpu>=1.20.0,<1.24.0`, `nvidia-*-cu12`, `onnx`, `onnxconverter-common`). |
+| **[NEW]** | `poc/backend/requirements/docker.txt` | Manifest riêng cho Docker GPU runtime (`onnxruntime-gpu==1.23.2`, `opencv-python-headless==5.1.0.95`, `supervision==0.27.0.post2`). |
 | **[MODIFY]** | `poc/backend/.env.example` | Chuẩn hóa biến môi trường PoC v001 (`PORT=28080`, thông tin NVR Trần Hân, cấu hình AI GPU & State Machine). |
-| **[MODIFY]** | `poc/backend/app/core/config.py` | Bổ sung các trường cấu hình mới, tự động tìm `yolo26s_fp16.onnx` → `yolo26s_best.onnx` → `yolo26s.onnx`, ưu tiên `poc/frontend/out` khi mount UI. |
-| **[NEW]** | `poc/backend/scripts/convert_onnx_fp16.py` | Script chuyển đổi `poc/models/yolo26s_best.onnx` sang `poc/models/yolo26s_fp16.onnx` (`keep_io_types=True`). |
-| **[NEW]** | `poc/backend/scripts/run_server.sh` | Script 1 lệnh trên Ubuntu `aiot`: tự động build Next.js (nếu cần) và `exec uv run` Uvicorn trên `PORT` với `Ctrl + C` sạch 100%. |
-| **[NEW]** | `poc/backend/app/ai/nvr_stream.py` | **`NvrStreamManager`**: Kéo trực tiếp luồng MJPEG (fallback Snapshot) qua HTTP Digest Auth từ `nmts2025.smartddns.tv`, lưu frame mới nhất vào RAM để chia sẻ cho cả AI Core và endpoint `/api/v1/cameras/{id}/mjpeg`. |
-| **[MODIFY]** | `poc/backend/app/ai/detector.py` | Nâng cấp `YoloPersonDetector`: hỗ trợ `CUDAExecutionProvider` (giới hạn VRAM `<= 1024 MB`), `warmup()`, `detect_batch()`, trả thêm `foot_x`, `foot_y`. |
-| **[NEW]** | `poc/backend/app/ai/tracker.py` | **`CameraTracker`**: `supervision.ByteTrack` + `_snap_box_to_raw(min_iou=0.45)` khử trễ pha Kalman Filter, giữ ổn định `track_id`. |
-| **[MODIFY]** | `poc/backend/app/ai/rule_engine.py` | **`ZoneRuleEngine`**: Máy trạng thái 4 trạng thái (`present`, `leaving`, `empty`, `alert`) → 3 màu (`green`, `yellow`, `red`), kiểm tra điểm chân `(foot_x, foot_y)`, đếm cảnh báo, cộng dồn thời gian và tạo Rolling Timeline 30 phút. |
-| **[NEW]** | `poc/backend/app/services/ws_hub.py` | **`DetectionWsHub`**: Quản lý kết nối WebSocket `/api/v1/ws/detections`, broadcast thread-safe từ luồng AI với tần số tới `15 Hz`. |
-| **[MODIFY]** | `poc/backend/app/ai/worker.py` | Kết nối `NvrStreamManager` + `YoloPersonDetector` + `CameraTracker` + `ZoneRuleEngine` + callback `DetectionWsHub`. |
-| **[MODIFY]** | `poc/backend/app/schemas/camera.py` | Thêm các trường `zone_name`, `feature_type`, `grace_seconds`, `warning_seconds` (tương thích ngược 100% với `cameras.json`). |
-| **[MODIFY]** | `poc/backend/app/services/camera_service.py` | Lưu & cập nhật các trường mới của camera; hỗ trợ lấy snapshot từ RAM `NvrStreamManager` nếu có sẵn để giảm tải NVR. |
-| **[MODIFY]** | `poc/backend/app/services/detection_service.py` | Bổ sung `reset_stats(cam_id)`. |
-| **[MODIFY]** | `poc/backend/app/dependencies/container.py` | Khởi tạo `DetectionWsHub`, `NvrStreamManager` và kết nối vào `PersonZoneDetector`, `DetectionService`, `CameraService`. |
-| **[MODIFY]** | `poc/backend/app/api/deps.py` | Thêm dependency `get_ws_hub()` và `get_nvr_stream_manager()`. |
-| **[MODIFY]** | `poc/backend/app/api/v1/endpoints/detections.py` | Thêm `WS /api/v1/ws/detections` và `POST /api/v1/detections/{cam_id}/reset-stats`. |
-| **[MODIFY]** | `poc/backend/app/api/v1/endpoints/cameras.py` | Nâng cấp `GET /api/v1/cameras/{cam_id}/mjpeg`: phát trực tiếp frame JPEG từ RAM `NvrStreamManager` (khi đang chạy cùng `subtype`), fallback về proxy NVR trực tiếp nếu cần. |
-| **[MODIFY]** | `poc/backend/app/api/v1/endpoints/config.py` | Trả thêm `timeline_window_sec`, `ws_path`, `ai_runtime` trong `GET /api/v1/config`. |
-| **[MODIFY]** | `poc/backend/app/main.py` | Gắn `ws_hub.bind_loop()` trong `lifespan`, khởi động/dừng `nvr_stream_manager` + `detection_service`, và mount tĩnh `poc/frontend/out/` (SPA Next.js) trên cùng cổng `28080`. |
+| **[MODIFY]** | `poc/backend/app/core/config.py` | Bổ sung các trường cấu hình (`DB_BACKEND`, `DISPLAY_GRID_W/Q`, `BBOX_STALE_SECONDS`, `AI_VRAM_LIMIT_MB=1536`, `AI_CONF_THRESHOLD=0.55`, `AI_ANCHOR_MODE=center`), ưu tiên `yolo26s.onnx` và `poc/frontend/out`. |
+| **[NEW]** | `poc/backend/scripts/` | `convert_onnx_fp16.py`, `run_server.sh`, `export_app_logs.py`, `probe_nvr.py`, `bench_decode.py`, `bench_infer.py`. |
+| **[NEW]** | `poc/backend/app/ai/nvr_stream.py` | **`NvrStreamManager`**: Kéo trực tiếp luồng MJPEG (fallback Snapshot) qua HTTP Digest Auth từ NVR, lưu `NvrFramePacket` mới nhất vào RAM. |
+| **[NEW]** | `poc/backend/app/ai/grid_cache.py` | **`GridFrameCache`**: Cache JPEG theo nhu cầu (demand-driven) cho Grid View (`854px`, `Q=68`) trên ThreadPool riêng. |
+| **[NEW]** | `poc/backend/app/db/sqlite_store.py` | **`SqliteStore`**: SQLite WAL + async writer thread lưu `cameras`, `alert_events` (retention 90 ngày), `runtime_snapshots`, `app_settings`. |
+| **[NEW]** | `poc/backend/app/repositories/sqlite_camera_repository.py` | **`SqliteCameraRepository`**: Lưu trữ camera/zone trên SQLite, tự migrate từ `data/cameras.json`. |
+| **[MODIFY]** | `poc/backend/app/ai/detector.py` | **`YoloPersonDetector`**: `CUDAExecutionProvider` (giới hạn VRAM `1536 MB`) với fallback CPU, tự nhận biết FP16/FP32, warmup pass. |
+| **[NEW]** | `poc/backend/app/ai/tracker.py` | **`CameraTracker`**: `supervision.ByteTrack` + `_snap_box_to_raw_ex(min_iou=0.25)` khử trễ pha Kalman Filter. |
+| **[MODIFY]** | `poc/backend/app/ai/rule_engine.py` | **`ZoneRuleEngine`**: Máy trạng thái 4 trạng thái (`present`, `leaving`, `empty`, `alert`) + `idle` → 3 màu (`green`, `yellow`, `red`), Rolling Timeline 30 phút. |
+| **[NEW]** | `poc/backend/app/services/ws_hub.py` | **`DetectionWsHub`**: `_ClientSender` coalescing (latest-wins), tách `publish_bbox_from_thread` và `publish_hud_from_thread`. |
+| **[MODIFY]** | `poc/backend/app/ai/worker.py` | **`PersonZoneDetector`**: JIT fetch + 1-cam overlap prefetch (`ThreadPoolExecutor(max_workers=1)`), skip AI camera chưa vẽ zone, lưu SQLite `alert_events` & `runtime_snapshots`. |
+| **[MODIFY]** | `poc/backend/app/api/v1/endpoints/` | Thêm `WS /api/v1/ws/detections`, `POST /detections/{id}/reset-stats`, `GET /detections/{id}/events`, `GET /metrics`, `mjpeg?view=grid|focus` (`X-Stream-Source`). |
 
 ---
 
@@ -98,17 +93,25 @@ NVR_STREAM_FPS_LIMIT=12.0
 AI_ENABLED=true
 MODEL_PATH=../models/yolo26s.onnx
 AI_RUNTIME=auto
-AI_VRAM_LIMIT_MB=1024
-AI_CONF_THRESHOLD=0.40
+AI_EP=auto
+AI_VRAM_LIMIT_MB=1536
+AI_CONF_THRESHOLD=0.55
 AI_IMGSZ=640
-AI_TARGET_FPS=12.0
-AI_ANCHOR_MODE=bottom_center
+AI_DECODE_REDUCE=1
+AI_SNAP_MIN_IOU=0.25
+AI_TARGET_FPS=0.0
+AI_ANCHOR_MODE=center
 AI_PRESENCE_GRACE_SECONDS=2.0
 AI_PRESENCE_WARNING_SECONDS=10.0
 AI_TIMELINE_WINDOW_SECONDS=1800
 AI_CONFIRM_SECONDS=2.0
 AI_EVENT_COOLDOWN_SECONDS=60.0
 WS_PUSH_MAX_HZ=15.0
+DISPLAY_GRID_W=854
+DISPLAY_GRID_Q=68
+BBOX_STALE_SECONDS=1.8
+DB_BACKEND=sqlite
+DB_PATH=../data/tranhan_poc.db
 ```
 
 #### Logic resolve đường dẫn thông minh trong `app/core/config.py`:
