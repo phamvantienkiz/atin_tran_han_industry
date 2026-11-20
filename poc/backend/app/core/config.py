@@ -52,7 +52,7 @@ class Settings(BaseSettings):
     AI_ENABLED: bool = True
     AI_RUNTIME: str = "auto"  # auto | onnx_cuda | cpu
     AI_VRAM_LIMIT_MB: int = 1024
-    AI_CONF_THRESHOLD: float = 0.40
+    AI_CONF_THRESHOLD: float = 0.55
     AI_IMGSZ: int = 640
     AI_TARGET_FPS: float = 12.0
     AI_ANCHOR_MODE: str = "center"  # center | bottom_center

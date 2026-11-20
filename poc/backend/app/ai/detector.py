@@ -41,7 +41,7 @@ class YoloPersonDetector:
     def __init__(
         self,
         model_path: Path,
-        conf: float = 0.40,
+        conf: float = 0.55,
         imgsz: int = 640,
         nms_iou: float = 0.45,
         runtime: str = "auto",
