@@ -6,9 +6,11 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import Response, StreamingResponse
 
+from app.ai.grid_cache import GridFrameCache
 from app.ai.nvr_stream import NvrStreamManager
 from app.api.deps import (
     get_camera_service,
+    get_grid_cache,
     get_media_service,
     get_nvr_stream_manager,
 )
@@ -103,19 +105,56 @@ async def stream_mjpeg(
     request: Request,
     service: Annotated[CameraService, Depends(get_camera_service)],
     stream_manager: Annotated[NvrStreamManager, Depends(get_nvr_stream_manager)],
+    grid_cache: Annotated[GridFrameCache, Depends(get_grid_cache)],
     subtype: int | None = Query(default=None, ge=0, le=2),
     view: str = Query(default="grid", pattern="^(grid|focus)$"),
 ) -> StreamingResponse:
-    _ = view  # reserved query param for frontend compatibility
     cam = service.get_camera(cam_id)
     requested_sub = int(cam.get("subtype", 0)) if subtype is None else subtype
+    stream_headers_base = {
+        "Cache-Control": "no-store, no-cache, must-revalidate",
+        "Pragma": "no-cache",
+        "X-Accel-Buffering": "no",
+    }
 
-    # Direct event-driven passthrough from NvrStreamManager (0ms delay, 0 CPU decode/encode)
     cached_pkt = stream_manager.latest(cam_id)
     if cached_pkt is not None and cached_pkt.subtype == requested_sub:
+        # Grid View on main stream (1080p): serve shared Latest-Frame resized JPEG (off asyncio loop)
+        if view == "grid" and requested_sub == 0:
 
+            async def grid_iterator() -> AsyncIterator[bytes]:
+                ev = grid_cache.register_grid_waiter(cam_id, initial_pkt=cached_pkt)
+                last_seq = -1
+                try:
+                    while not await request.is_disconnected():
+                        raw_pkt = stream_manager.latest(cam_id)
+                        if raw_pkt is None or raw_pkt.subtype != requested_sub:
+                            break
+                        gf = grid_cache.latest_grid(cam_id)
+                        if gf is not None and gf.subtype == requested_sub and gf.seq != last_seq:
+                            last_seq = gf.seq
+                            yield _format_mjpeg_part(gf.jpeg_bytes)
+                        ev.clear()
+                        try:
+                            await asyncio.wait_for(ev.wait(), timeout=1.0)
+                        except asyncio.TimeoutError:
+                            continue
+                finally:
+                    grid_cache.unregister_grid_waiter(cam_id, ev)
+
+            return StreamingResponse(
+                grid_iterator(),
+                media_type="multipart/x-mixed-replace; boundary=frame",
+                headers={
+                    **stream_headers_base,
+                    "X-Stream-Source": "ram-grid-cache",
+                },
+            )
+
+        # Focus View (or already-small sub-stream): direct passthrough of raw NVR JPEG bytes
         async def ram_iterator() -> AsyncIterator[bytes]:
             ev = stream_manager.register_waiter(cam_id)
+            grid_cache.register_focus_viewer(cam_id)
             last_seq = -1
             try:
                 while not await request.is_disconnected():
@@ -131,13 +170,14 @@ async def stream_mjpeg(
                     except asyncio.TimeoutError:
                         continue
             finally:
+                grid_cache.unregister_focus_viewer(cam_id)
                 stream_manager.unregister_waiter(cam_id, ev)
 
         return StreamingResponse(
             ram_iterator(),
             media_type="multipart/x-mixed-replace; boundary=frame",
             headers={
-                "Cache-Control": "no-store, no-cache, must-revalidate",
+                **stream_headers_base,
                 "X-Stream-Source": "ram-direct",
             },
         )
@@ -176,7 +216,7 @@ async def stream_mjpeg(
         body_iterator(),
         media_type=content_type,
         headers={
-            "Cache-Control": "no-store",
+            **stream_headers_base,
             "X-Stream-Source": "nvr-direct",
         },
     )

@@ -15,6 +15,7 @@ import numpy as np
 
 from app.ai.detector import YoloPersonDetector
 from app.ai.display_pipeline import DisplayAndSyncPipeline
+from app.ai.grid_cache import GridFrameCache
 from app.ai.nvr_stream import NvrFramePacket, NvrStreamManager
 from app.ai.rule_engine import ZoneEvaluation, ZoneRuleEngine
 from app.ai.tracker import CameraTracker, TrackedPerson
@@ -57,6 +58,7 @@ class PersonZoneDetector:
         timeline_window_seconds: int = 1800,
         nvr_stream_manager: NvrStreamManager | None = None,
         display_pipeline: DisplayAndSyncPipeline | None = None,
+        grid_cache: GridFrameCache | None = None,
         sqlite_store: SqliteStore | None = None,
         ws_legacy_payload: bool = False,
         on_update: Callable[[dict[str, dict[str, Any]]], None] | None = None,
@@ -77,6 +79,7 @@ class PersonZoneDetector:
 
         self._stream_manager = nvr_stream_manager
         self._display_pipeline = display_pipeline
+        self._grid_cache = grid_cache
         self._sqlite_store = sqlite_store
         self._on_update = on_update
         self._on_bbox = on_bbox
@@ -193,11 +196,17 @@ class PersonZoneDetector:
 
     def get_metrics(self) -> dict[str, Any]:
         display_metrics = self._display_pipeline.get_metrics() if self._display_pipeline else {}
+        grid_metrics = self._grid_cache.get_metrics() if self._grid_cache else {}
         with self._lock:
             ai_m = {k: dict(v) for k, v in self._ai_metrics.items()}
         merged: dict[str, dict[str, Any]] = {}
-        for cam_id in sorted(set(display_metrics.keys()) | set(ai_m.keys())):
-            merged[cam_id] = {**display_metrics.get(cam_id, {}), **ai_m.get(cam_id, {})}
+        all_cam_ids = sorted(set(display_metrics.keys()) | set(grid_metrics.keys()) | set(ai_m.keys()))
+        for cam_id in all_cam_ids:
+            merged[cam_id] = {
+                **display_metrics.get(cam_id, {}),
+                **grid_metrics.get(cam_id, {}),
+                **ai_m.get(cam_id, {}),
+            }
         return {
             "active_provider": self._detector.active_provider,
             "cameras": merged,

@@ -33,6 +33,7 @@ WORKDIR /app/backend
 
 COPY backend/pyproject.toml ./pyproject.toml
 COPY backend/app ./app
+COPY backend/scripts ./scripts
 
 # Install backend dependencies + CUDA 12 ONNX Runtime GPU (uses container's native CUDA 12.4 + cuDNN 9)
 RUN python3 -m pip install --upgrade pip \

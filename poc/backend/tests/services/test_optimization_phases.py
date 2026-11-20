@@ -1,7 +1,12 @@
 import time
 from pathlib import Path
 
+import cv2
+import numpy as np
+
 from app.ai.display_pipeline import AiTrackSnapshot, _interpolate_tracks
+from app.ai.grid_cache import GridFrameCache
+from app.ai.nvr_stream import NvrFramePacket
 from app.ai.tracker import TrackedPerson
 from app.db.sqlite_store import SqliteStore
 from app.repositories.sqlite_camera_repository import SqliteCameraRepository
@@ -99,3 +104,55 @@ def test_sqlite_store_and_camera_repo_migration(tmp_path: Path) -> None:
         assert events[0]["duration_s"] == 15.0
     finally:
         store.close()
+
+
+def test_grid_frame_cache_demand_driven_and_shared() -> None:
+    rng = np.random.default_rng(42)
+    img_1080p = rng.integers(0, 255, size=(1080, 1920, 3), dtype=np.uint8)
+    ok, enc = cv2.imencode(".jpg", img_1080p, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
+    assert ok
+    raw_bytes = enc.tobytes()
+
+    cache = GridFrameCache(grid_width=960, jpeg_quality=72, max_workers=1)
+    try:
+        pkt1 = NvrFramePacket(
+            cam_id="cam_16",
+            channel=16,
+            subtype=0,
+            frame=None,
+            jpeg_bytes=raw_bytes,
+            seq=1,
+            ts_mono=time.monotonic(),
+            ts_wall=time.time(),
+        )
+        # 0 viewers -> must NOT encode
+        cache.on_raw_frame(pkt1)
+        time.sleep(0.05)
+        assert cache.latest_grid("cam_16") is None
+
+        # Register 2 shared viewers -> encodes once and shares same GridFrame
+        ev1 = cache.register_grid_waiter("cam_16", initial_pkt=pkt1)
+        ev2 = cache.register_grid_waiter("cam_16", initial_pkt=pkt1)
+        deadline = time.monotonic() + 2.0
+        while cache.latest_grid("cam_16") is None and time.monotonic() < deadline:
+            time.sleep(0.02)
+
+        gf = cache.latest_grid("cam_16")
+        assert gf is not None
+        assert gf.seq == 1
+        assert gf.size_bytes < len(raw_bytes)
+
+        dec = cv2.imdecode(np.frombuffer(gf.jpeg_bytes, dtype=np.uint8), cv2.IMREAD_COLOR)
+        assert dec is not None
+        assert dec.shape[1] == 960
+        assert dec.shape[0] == 540
+
+        metrics = cache.get_metrics()["cam_16"]
+        assert metrics["grid_viewers"] == 2
+        assert metrics["grid_jpeg_kb"] < metrics["raw_jpeg_kb"]
+
+        cache.unregister_grid_waiter("cam_16", ev1)
+        cache.unregister_grid_waiter("cam_16", ev2)
+        assert cache.get_metrics()["cam_16"]["grid_viewers"] == 0
+    finally:
+        cache.stop()

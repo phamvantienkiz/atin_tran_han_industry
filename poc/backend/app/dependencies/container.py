@@ -5,6 +5,7 @@ from __future__ import annotations
 from functools import lru_cache
 
 from app.ai.display_pipeline import DisplayAndSyncPipeline
+from app.ai.grid_cache import GridFrameCache
 from app.ai.nvr_stream import NvrStreamManager
 from app.ai.worker import PersonZoneDetector
 from app.core.config import settings
@@ -35,6 +36,10 @@ class ServiceContainer:
             self.camera_repo = JsonCameraRepository(settings.cameras_file_path)
 
         self.ws_hub = DetectionWsHub(max_hz=settings.WS_PUSH_MAX_HZ)
+        self.grid_cache = GridFrameCache(
+            grid_width=settings.DISPLAY_GRID_W,
+            jpeg_quality=settings.DISPLAY_GRID_Q,
+        )
         self.display_pipeline = DisplayAndSyncPipeline(
             grid_w=settings.DISPLAY_GRID_W,
             grid_q=settings.DISPLAY_GRID_Q,
@@ -85,13 +90,19 @@ class ServiceContainer:
             timeline_window_seconds=settings.AI_TIMELINE_WINDOW_SECONDS,
             nvr_stream_manager=self.nvr_stream_manager,
             display_pipeline=None,
+            grid_cache=self.grid_cache,
             sqlite_store=self.sqlite_store,
             ws_legacy_payload=settings.WS_LEGACY_PAYLOAD,
             on_update=self.ws_hub.publish_from_thread,
             on_bbox=self.ws_hub.publish_bbox_from_thread,
             on_hud=self.ws_hub.publish_hud_from_thread,
         )
-        self.nvr_stream_manager.set_on_frame(lambda _pkt: self.detector.notify_new_frame())
+
+        def _on_nvr_frame(pkt) -> None:
+            self.grid_cache.on_raw_frame(pkt)
+            self.detector.notify_new_frame()
+
+        self.nvr_stream_manager.set_on_frame(_on_nvr_frame)
         self.detection_service = DetectionService(
             detector=self.detector,
             camera_service=self.camera_service,

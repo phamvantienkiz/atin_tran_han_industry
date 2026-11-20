@@ -21,6 +21,7 @@ async def lifespan(_app: FastAPI):
     loop = asyncio.get_running_loop()
     container.ws_hub.bind_loop(loop)
     container.nvr_stream_manager.bind_loop(loop)
+    container.grid_cache.bind_loop(loop)
 
     if settings.nvr_configured:
         container.nvr_stream_manager.reset_for_start()
@@ -35,6 +36,7 @@ async def lifespan(_app: FastAPI):
     finally:
         await container.ws_hub.close_all()
         container.detection_service.stop()
+        container.grid_cache.stop()
         container.nvr_stream_manager.stop_all()
         if container.sqlite_store is not None:
             container.sqlite_store.close()

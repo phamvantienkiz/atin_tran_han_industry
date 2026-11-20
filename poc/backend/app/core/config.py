@@ -70,8 +70,8 @@ class Settings(BaseSettings):
     WS_PUSH_MAX_HZ: float = 15.0
 
     # --- Display & Time-Aligned Synced Playback ---
-    DISPLAY_GRID_W: int = 960
-    DISPLAY_GRID_Q: int = 80
+    DISPLAY_GRID_W: int = 854
+    DISPLAY_GRID_Q: int = 68
     DISPLAY_FOCUS_W: int = 1920
     DISPLAY_FOCUS_Q: int = 85
     STREAM_SYNC_DELAY_MS: int = 0

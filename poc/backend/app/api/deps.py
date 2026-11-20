@@ -3,6 +3,7 @@ from collections.abc import AsyncGenerator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.display_pipeline import DisplayAndSyncPipeline
+from app.ai.grid_cache import GridFrameCache
 from app.ai.nvr_stream import NvrStreamManager
 from app.db.session import async_session_factory
 from app.dependencies.container import get_container
@@ -47,3 +48,7 @@ def get_nvr_stream_manager() -> NvrStreamManager:
 
 def get_display_pipeline() -> DisplayAndSyncPipeline:
     return get_container().display_pipeline
+
+
+def get_grid_cache() -> GridFrameCache:
+    return get_container().grid_cache
