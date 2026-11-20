@@ -15,6 +15,7 @@ downloads/
 eggs/
 .eggs/
 lib/
+!poc/frontend/src/lib/
 lib64/
 parts/
 sdist/
@@ -219,10 +220,16 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
+# models
+*.pt
+*.onnx
+
 # user customs
 customers/
 docs/ai/
-view/docs/linkcam.md
+docs/note/
+poc/docs/linkcam.md
+poc/report/
 .vscode/
 runs/
 *.cache
